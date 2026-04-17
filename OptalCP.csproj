@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>12.0</LangVersion>
+
+    <!-- NuGet Package Metadata -->
+    <PackageId>OptalCP</PackageId>
+    <Version>2026.3.0</Version>
+    <Company>OptalCP</Company>
+    <Product>OptalCP</Product>
+    <Description>C# API for OptalCP constraint programming solver</Description>
+    <PackageTags>constraint-programming;optimization;scheduling;solver;operations-research</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Package settings -->
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Enable latest Roslyn analyzers (API design, null safety, performance) -->
+    <AnalysisLevel>latest</AnalysisLevel>
+    <!-- CS0419: Ambiguous cref on overloaded methods (harmless, compiler picks one) -->
+    <NoWarn>CS0419</NoWarn>
+  </PropertyGroup>
+
+  <!-- Include README in package -->
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- Expose internals to the test project -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="OptalCP.Tests" />
+  </ItemGroup>
+
+
+</Project>
