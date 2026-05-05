@@ -1,6 +1,6 @@
 // ===========================================================================
 // OptalCP C# API - Parameters
-// Version: 2026.3.0
+// Version: 2026.4.0
 // ===========================================================================
 
 using System;
@@ -1349,6 +1349,36 @@ namespace OptalCP
         public bool? _lnsResourceOptimization { get; set; }
 
         /// <summary>
+        /// Core weight for absent intervals in LNS neighborhoods
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public double? _lnsAbsentCoreWeight { get; set; }
+
+        /// <summary>
+        /// Relationship weight for absent-override arcs in POS
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public double? _arcWeightAbsentOverride { get; set; }
+
+        /// <summary>
+        /// Relationship weight for alternative main-option arcs when the option is chosen in the current solution
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public double? _arcWeightAlternativeChosen { get; set; }
+
+        /// <summary>
+        /// Relationship weight for alternative main-option arcs when the option is not chosen in the current solution
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public double? _arcWeightAlternativeNotChosen { get; set; }
+
+        /// <summary>
+        /// Relationship weight for touching POS arcs in noOverlap
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public double? _arcWeightTouchingPOS { get; set; }
+
+        /// <summary>
         /// Whether to restore absent interval variables in LNS steps
         /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
@@ -1735,6 +1765,30 @@ namespace OptalCP
         /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         public long? _discreteLowCapacityLimit { get; set; }
+
+        /// <summary>
+        /// Schulz R1: saturate near-full pulses to C
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public bool? _presolveCumulRule1 { get; set; }
+
+        /// <summary>
+        /// Schulz R2: GCD reduction of pulse heights
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public bool? _presolveCumulRule2 { get; set; }
+
+        /// <summary>
+        /// Schulz R3: knapsack reduction of C
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public bool? _presolveCumulRule3 { get; set; }
+
+        /// <summary>
+        /// Schulz R4 max demands per resource (0 = always skip)
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public long? _presolveCumulRule4MaxDemands { get; set; }
 
         /// <summary>
         /// Objective value to start LNS training
@@ -2565,6 +2619,66 @@ namespace OptalCP
                 result["_lnsResourceOptimization"] = _lnsResourceOptimization;
             }
 
+            if (_lnsAbsentCoreWeight != null)
+            {
+                if (_lnsAbsentCoreWeight < 0 || _lnsAbsentCoreWeight > 10)
+                    throw new ArgumentException($"Value {_lnsAbsentCoreWeight} for parameter LNSAbsentCoreWeight is out of range [0, 10]");
+                if (double.IsPositiveInfinity(_lnsAbsentCoreWeight.Value))
+                    result["_lnsAbsentCoreWeight"] = "Infinity";
+                else if (double.IsNegativeInfinity(_lnsAbsentCoreWeight.Value))
+                    result["_lnsAbsentCoreWeight"] = "-Infinity";
+                else
+                    result["_lnsAbsentCoreWeight"] = _lnsAbsentCoreWeight;
+            }
+
+            if (_arcWeightAbsentOverride != null)
+            {
+                if (_arcWeightAbsentOverride < 0 || _arcWeightAbsentOverride > 10)
+                    throw new ArgumentException($"Value {_arcWeightAbsentOverride} for parameter ArcWeightAbsentOverride is out of range [0, 10]");
+                if (double.IsPositiveInfinity(_arcWeightAbsentOverride.Value))
+                    result["_arcWeightAbsentOverride"] = "Infinity";
+                else if (double.IsNegativeInfinity(_arcWeightAbsentOverride.Value))
+                    result["_arcWeightAbsentOverride"] = "-Infinity";
+                else
+                    result["_arcWeightAbsentOverride"] = _arcWeightAbsentOverride;
+            }
+
+            if (_arcWeightAlternativeChosen != null)
+            {
+                if (_arcWeightAlternativeChosen < 0 || _arcWeightAlternativeChosen > 10)
+                    throw new ArgumentException($"Value {_arcWeightAlternativeChosen} for parameter ArcWeightAlternativeChosen is out of range [0, 10]");
+                if (double.IsPositiveInfinity(_arcWeightAlternativeChosen.Value))
+                    result["_arcWeightAlternativeChosen"] = "Infinity";
+                else if (double.IsNegativeInfinity(_arcWeightAlternativeChosen.Value))
+                    result["_arcWeightAlternativeChosen"] = "-Infinity";
+                else
+                    result["_arcWeightAlternativeChosen"] = _arcWeightAlternativeChosen;
+            }
+
+            if (_arcWeightAlternativeNotChosen != null)
+            {
+                if (_arcWeightAlternativeNotChosen < 0 || _arcWeightAlternativeNotChosen > 10)
+                    throw new ArgumentException($"Value {_arcWeightAlternativeNotChosen} for parameter ArcWeightAlternativeNotChosen is out of range [0, 10]");
+                if (double.IsPositiveInfinity(_arcWeightAlternativeNotChosen.Value))
+                    result["_arcWeightAlternativeNotChosen"] = "Infinity";
+                else if (double.IsNegativeInfinity(_arcWeightAlternativeNotChosen.Value))
+                    result["_arcWeightAlternativeNotChosen"] = "-Infinity";
+                else
+                    result["_arcWeightAlternativeNotChosen"] = _arcWeightAlternativeNotChosen;
+            }
+
+            if (_arcWeightTouchingPOS != null)
+            {
+                if (_arcWeightTouchingPOS < 0 || _arcWeightTouchingPOS > 100)
+                    throw new ArgumentException($"Value {_arcWeightTouchingPOS} for parameter ArcWeightTouchingPOS is out of range [0, 100]");
+                if (double.IsPositiveInfinity(_arcWeightTouchingPOS.Value))
+                    result["_arcWeightTouchingPOS"] = "Infinity";
+                else if (double.IsNegativeInfinity(_arcWeightTouchingPOS.Value))
+                    result["_arcWeightTouchingPOS"] = "-Infinity";
+                else
+                    result["_arcWeightTouchingPOS"] = _arcWeightTouchingPOS;
+            }
+
             if (_lnsRestoreAbsentIntervals != null)
             {
                 result["_lnsRestoreAbsentIntervals"] = _lnsRestoreAbsentIntervals;
@@ -3056,6 +3170,26 @@ namespace OptalCP
                 if (_discreteLowCapacityLimit < 0 || _discreteLowCapacityLimit > 16)
                     throw new ArgumentException($"Value {_discreteLowCapacityLimit} for parameter DiscreteLowCapacityLimit is out of range [0, 16]");
                 result["_discreteLowCapacityLimit"] = _discreteLowCapacityLimit;
+            }
+
+            if (_presolveCumulRule1 != null)
+            {
+                result["_presolveCumulRule1"] = _presolveCumulRule1;
+            }
+
+            if (_presolveCumulRule2 != null)
+            {
+                result["_presolveCumulRule2"] = _presolveCumulRule2;
+            }
+
+            if (_presolveCumulRule3 != null)
+            {
+                result["_presolveCumulRule3"] = _presolveCumulRule3;
+            }
+
+            if (_presolveCumulRule4MaxDemands != null)
+            {
+                result["_presolveCumulRule4MaxDemands"] = _presolveCumulRule4MaxDemands;
             }
 
             if (_lnsTrainingObjectiveLimit != null)
@@ -4129,6 +4263,81 @@ namespace OptalCP
                 }
             }
 
+            if (data.TryGetValue("_lnsAbsentCoreWeight", out var lnsAbsentCoreWeightVal) && lnsAbsentCoreWeightVal != null)
+            {
+                if (lnsAbsentCoreWeightVal is System.Text.Json.JsonElement lnsAbsentCoreWeightElem)
+                {
+                    if (lnsAbsentCoreWeightElem.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        parameters._lnsAbsentCoreWeight = lnsAbsentCoreWeightElem.GetDouble();
+                    else if (lnsAbsentCoreWeightElem.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var str = lnsAbsentCoreWeightElem.GetString();
+                        if (str == "Infinity") parameters._lnsAbsentCoreWeight = double.PositiveInfinity;
+                        else if (str == "-Infinity") parameters._lnsAbsentCoreWeight = double.NegativeInfinity;
+                    }
+                }
+            }
+
+            if (data.TryGetValue("_arcWeightAbsentOverride", out var arcWeightAbsentOverrideVal) && arcWeightAbsentOverrideVal != null)
+            {
+                if (arcWeightAbsentOverrideVal is System.Text.Json.JsonElement arcWeightAbsentOverrideElem)
+                {
+                    if (arcWeightAbsentOverrideElem.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        parameters._arcWeightAbsentOverride = arcWeightAbsentOverrideElem.GetDouble();
+                    else if (arcWeightAbsentOverrideElem.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var str = arcWeightAbsentOverrideElem.GetString();
+                        if (str == "Infinity") parameters._arcWeightAbsentOverride = double.PositiveInfinity;
+                        else if (str == "-Infinity") parameters._arcWeightAbsentOverride = double.NegativeInfinity;
+                    }
+                }
+            }
+
+            if (data.TryGetValue("_arcWeightAlternativeChosen", out var arcWeightAlternativeChosenVal) && arcWeightAlternativeChosenVal != null)
+            {
+                if (arcWeightAlternativeChosenVal is System.Text.Json.JsonElement arcWeightAlternativeChosenElem)
+                {
+                    if (arcWeightAlternativeChosenElem.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        parameters._arcWeightAlternativeChosen = arcWeightAlternativeChosenElem.GetDouble();
+                    else if (arcWeightAlternativeChosenElem.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var str = arcWeightAlternativeChosenElem.GetString();
+                        if (str == "Infinity") parameters._arcWeightAlternativeChosen = double.PositiveInfinity;
+                        else if (str == "-Infinity") parameters._arcWeightAlternativeChosen = double.NegativeInfinity;
+                    }
+                }
+            }
+
+            if (data.TryGetValue("_arcWeightAlternativeNotChosen", out var arcWeightAlternativeNotChosenVal) && arcWeightAlternativeNotChosenVal != null)
+            {
+                if (arcWeightAlternativeNotChosenVal is System.Text.Json.JsonElement arcWeightAlternativeNotChosenElem)
+                {
+                    if (arcWeightAlternativeNotChosenElem.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        parameters._arcWeightAlternativeNotChosen = arcWeightAlternativeNotChosenElem.GetDouble();
+                    else if (arcWeightAlternativeNotChosenElem.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var str = arcWeightAlternativeNotChosenElem.GetString();
+                        if (str == "Infinity") parameters._arcWeightAlternativeNotChosen = double.PositiveInfinity;
+                        else if (str == "-Infinity") parameters._arcWeightAlternativeNotChosen = double.NegativeInfinity;
+                    }
+                }
+            }
+
+            if (data.TryGetValue("_arcWeightTouchingPOS", out var arcWeightTouchingPOSVal) && arcWeightTouchingPOSVal != null)
+            {
+                if (arcWeightTouchingPOSVal is System.Text.Json.JsonElement arcWeightTouchingPOSElem)
+                {
+                    if (arcWeightTouchingPOSElem.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        parameters._arcWeightTouchingPOS = arcWeightTouchingPOSElem.GetDouble();
+                    else if (arcWeightTouchingPOSElem.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var str = arcWeightTouchingPOSElem.GetString();
+                        if (str == "Infinity") parameters._arcWeightTouchingPOS = double.PositiveInfinity;
+                        else if (str == "-Infinity") parameters._arcWeightTouchingPOS = double.NegativeInfinity;
+                    }
+                }
+            }
+
             if (data.TryGetValue("_lnsRestoreAbsentIntervals", out var lnsRestoreAbsentIntervalsVal) && lnsRestoreAbsentIntervalsVal != null)
             {
                 if (lnsRestoreAbsentIntervalsVal is System.Text.Json.JsonElement lnsRestoreAbsentIntervalsElem)
@@ -4827,6 +5036,48 @@ namespace OptalCP
                 {
                     if (discreteLowCapacityLimitElem.ValueKind == System.Text.Json.JsonValueKind.Number)
                         parameters._discreteLowCapacityLimit = discreteLowCapacityLimitElem.GetInt64();
+                }
+            }
+
+            if (data.TryGetValue("_presolveCumulRule1", out var presolveCumulRule1Val) && presolveCumulRule1Val != null)
+            {
+                if (presolveCumulRule1Val is System.Text.Json.JsonElement presolveCumulRule1Elem)
+                {
+                    if (presolveCumulRule1Elem.ValueKind == System.Text.Json.JsonValueKind.True)
+                        parameters._presolveCumulRule1 = true;
+                    else if (presolveCumulRule1Elem.ValueKind == System.Text.Json.JsonValueKind.False)
+                        parameters._presolveCumulRule1 = false;
+                }
+            }
+
+            if (data.TryGetValue("_presolveCumulRule2", out var presolveCumulRule2Val) && presolveCumulRule2Val != null)
+            {
+                if (presolveCumulRule2Val is System.Text.Json.JsonElement presolveCumulRule2Elem)
+                {
+                    if (presolveCumulRule2Elem.ValueKind == System.Text.Json.JsonValueKind.True)
+                        parameters._presolveCumulRule2 = true;
+                    else if (presolveCumulRule2Elem.ValueKind == System.Text.Json.JsonValueKind.False)
+                        parameters._presolveCumulRule2 = false;
+                }
+            }
+
+            if (data.TryGetValue("_presolveCumulRule3", out var presolveCumulRule3Val) && presolveCumulRule3Val != null)
+            {
+                if (presolveCumulRule3Val is System.Text.Json.JsonElement presolveCumulRule3Elem)
+                {
+                    if (presolveCumulRule3Elem.ValueKind == System.Text.Json.JsonValueKind.True)
+                        parameters._presolveCumulRule3 = true;
+                    else if (presolveCumulRule3Elem.ValueKind == System.Text.Json.JsonValueKind.False)
+                        parameters._presolveCumulRule3 = false;
+                }
+            }
+
+            if (data.TryGetValue("_presolveCumulRule4MaxDemands", out var presolveCumulRule4MaxDemandsVal) && presolveCumulRule4MaxDemandsVal != null)
+            {
+                if (presolveCumulRule4MaxDemandsVal is System.Text.Json.JsonElement presolveCumulRule4MaxDemandsElem)
+                {
+                    if (presolveCumulRule4MaxDemandsElem.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        parameters._presolveCumulRule4MaxDemands = presolveCumulRule4MaxDemandsElem.GetInt64();
                 }
             }
 
@@ -6331,6 +6582,66 @@ namespace OptalCP
                             GetOrCreateWorker(parameters, i)._lnsResourceOptimization = parsed;
                     return true;
                 }
+                case "lnsabsentcoreweight":
+                {
+                    var parsed = ParseDouble(value, "LNSAbsentCoreWeight");
+                    if (parsed < 0 || parsed > 10)
+                        throw new ArgumentException($"Value {parsed} for parameter LNSAbsentCoreWeight is out of range [0, 10]");
+                    if (workerRange == null)
+                        parameters._lnsAbsentCoreWeight = parsed;
+                    else
+                        for (int i = workerRange.Value.Min; i <= workerRange.Value.Max; i++)
+                            GetOrCreateWorker(parameters, i)._lnsAbsentCoreWeight = parsed;
+                    return true;
+                }
+                case "arcweightabsentoverride":
+                {
+                    var parsed = ParseDouble(value, "ArcWeightAbsentOverride");
+                    if (parsed < 0 || parsed > 10)
+                        throw new ArgumentException($"Value {parsed} for parameter ArcWeightAbsentOverride is out of range [0, 10]");
+                    if (workerRange == null)
+                        parameters._arcWeightAbsentOverride = parsed;
+                    else
+                        for (int i = workerRange.Value.Min; i <= workerRange.Value.Max; i++)
+                            GetOrCreateWorker(parameters, i)._arcWeightAbsentOverride = parsed;
+                    return true;
+                }
+                case "arcweightalternativechosen":
+                {
+                    var parsed = ParseDouble(value, "ArcWeightAlternativeChosen");
+                    if (parsed < 0 || parsed > 10)
+                        throw new ArgumentException($"Value {parsed} for parameter ArcWeightAlternativeChosen is out of range [0, 10]");
+                    if (workerRange == null)
+                        parameters._arcWeightAlternativeChosen = parsed;
+                    else
+                        for (int i = workerRange.Value.Min; i <= workerRange.Value.Max; i++)
+                            GetOrCreateWorker(parameters, i)._arcWeightAlternativeChosen = parsed;
+                    return true;
+                }
+                case "arcweightalternativenotchosen":
+                {
+                    var parsed = ParseDouble(value, "ArcWeightAlternativeNotChosen");
+                    if (parsed < 0 || parsed > 10)
+                        throw new ArgumentException($"Value {parsed} for parameter ArcWeightAlternativeNotChosen is out of range [0, 10]");
+                    if (workerRange == null)
+                        parameters._arcWeightAlternativeNotChosen = parsed;
+                    else
+                        for (int i = workerRange.Value.Min; i <= workerRange.Value.Max; i++)
+                            GetOrCreateWorker(parameters, i)._arcWeightAlternativeNotChosen = parsed;
+                    return true;
+                }
+                case "arcweighttouchingpos":
+                {
+                    var parsed = ParseDouble(value, "ArcWeightTouchingPOS");
+                    if (parsed < 0 || parsed > 100)
+                        throw new ArgumentException($"Value {parsed} for parameter ArcWeightTouchingPOS is out of range [0, 100]");
+                    if (workerRange == null)
+                        parameters._arcWeightTouchingPOS = parsed;
+                    else
+                        for (int i = workerRange.Value.Min; i <= workerRange.Value.Max; i++)
+                            GetOrCreateWorker(parameters, i)._arcWeightTouchingPOS = parsed;
+                    return true;
+                }
                 case "lnsrestoreabsentintervals":
                 {
                     var parsed = ParseBool(value, "LNSRestoreAbsentIntervals");
@@ -7014,6 +7325,46 @@ namespace OptalCP
                             GetOrCreateWorker(parameters, i)._discreteLowCapacityLimit = parsed;
                     return true;
                 }
+                case "presolvecumulrule1":
+                {
+                    var parsed = ParseBool(value, "PresolveCumulRule1");
+                    if (workerRange == null)
+                        parameters._presolveCumulRule1 = parsed;
+                    else
+                        for (int i = workerRange.Value.Min; i <= workerRange.Value.Max; i++)
+                            GetOrCreateWorker(parameters, i)._presolveCumulRule1 = parsed;
+                    return true;
+                }
+                case "presolvecumulrule2":
+                {
+                    var parsed = ParseBool(value, "PresolveCumulRule2");
+                    if (workerRange == null)
+                        parameters._presolveCumulRule2 = parsed;
+                    else
+                        for (int i = workerRange.Value.Min; i <= workerRange.Value.Max; i++)
+                            GetOrCreateWorker(parameters, i)._presolveCumulRule2 = parsed;
+                    return true;
+                }
+                case "presolvecumulrule3":
+                {
+                    var parsed = ParseBool(value, "PresolveCumulRule3");
+                    if (workerRange == null)
+                        parameters._presolveCumulRule3 = parsed;
+                    else
+                        for (int i = workerRange.Value.Min; i <= workerRange.Value.Max; i++)
+                            GetOrCreateWorker(parameters, i)._presolveCumulRule3 = parsed;
+                    return true;
+                }
+                case "presolvecumulrule4maxdemands":
+                {
+                    var parsed = ParseLong(value, "PresolveCumulRule4MaxDemands");
+                    if (workerRange == null)
+                        parameters._presolveCumulRule4MaxDemands = parsed;
+                    else
+                        for (int i = workerRange.Value.Min; i <= workerRange.Value.Max; i++)
+                            GetOrCreateWorker(parameters, i)._presolveCumulRule4MaxDemands = parsed;
+                    return true;
+                }
                 case "lnstrainingobjectivelimit":
                 {
                     var parsed = ParseDouble(value, "LNSTrainingObjectiveLimit");
@@ -7242,6 +7593,11 @@ namespace OptalCP
             dst._lnsSkipNoImprovementProbability = @params._lnsSkipNoImprovementProbability;
             dst._lnsSmallStructureLimit = @params._lnsSmallStructureLimit;
             dst._lnsResourceOptimization = @params._lnsResourceOptimization;
+            dst._lnsAbsentCoreWeight = @params._lnsAbsentCoreWeight;
+            dst._arcWeightAbsentOverride = @params._arcWeightAbsentOverride;
+            dst._arcWeightAlternativeChosen = @params._arcWeightAlternativeChosen;
+            dst._arcWeightAlternativeNotChosen = @params._arcWeightAlternativeNotChosen;
+            dst._arcWeightTouchingPOS = @params._arcWeightTouchingPOS;
             dst._lnsRestoreAbsentIntervals = @params._lnsRestoreAbsentIntervals;
             dst._lnsRestoreIntervalLengths = @params._lnsRestoreIntervalLengths;
             dst._lnsRestoreIntVarValues = @params._lnsRestoreIntVarValues;
@@ -7303,6 +7659,10 @@ namespace OptalCP
             dst._lnsDisabledHeuristics = @params._lnsDisabledHeuristics;
             dst._setTimesNbExtendsFactor = @params._setTimesNbExtendsFactor;
             dst._discreteLowCapacityLimit = @params._discreteLowCapacityLimit;
+            dst._presolveCumulRule1 = @params._presolveCumulRule1;
+            dst._presolveCumulRule2 = @params._presolveCumulRule2;
+            dst._presolveCumulRule3 = @params._presolveCumulRule3;
+            dst._presolveCumulRule4MaxDemands = @params._presolveCumulRule4MaxDemands;
             dst._lnsTrainingObjectiveLimit = @params._lnsTrainingObjectiveLimit;
             dst._posAbsentRelated = @params._posAbsentRelated;
             dst._defaultCallbackBlockSize = @params._defaultCallbackBlockSize;
@@ -7393,6 +7753,11 @@ namespace OptalCP
                     wc._lnsSkipNoImprovementProbability = w._lnsSkipNoImprovementProbability;
                     wc._lnsSmallStructureLimit = w._lnsSmallStructureLimit;
                     wc._lnsResourceOptimization = w._lnsResourceOptimization;
+                    wc._lnsAbsentCoreWeight = w._lnsAbsentCoreWeight;
+                    wc._arcWeightAbsentOverride = w._arcWeightAbsentOverride;
+                    wc._arcWeightAlternativeChosen = w._arcWeightAlternativeChosen;
+                    wc._arcWeightAlternativeNotChosen = w._arcWeightAlternativeNotChosen;
+                    wc._arcWeightTouchingPOS = w._arcWeightTouchingPOS;
                     wc._lnsRestoreAbsentIntervals = w._lnsRestoreAbsentIntervals;
                     wc._lnsRestoreIntervalLengths = w._lnsRestoreIntervalLengths;
                     wc._lnsRestoreIntVarValues = w._lnsRestoreIntVarValues;
@@ -7453,6 +7818,10 @@ namespace OptalCP
                     wc._lnsDisabledHeuristics = w._lnsDisabledHeuristics;
                     wc._setTimesNbExtendsFactor = w._setTimesNbExtendsFactor;
                     wc._discreteLowCapacityLimit = w._discreteLowCapacityLimit;
+                    wc._presolveCumulRule1 = w._presolveCumulRule1;
+                    wc._presolveCumulRule2 = w._presolveCumulRule2;
+                    wc._presolveCumulRule3 = w._presolveCumulRule3;
+                    wc._presolveCumulRule4MaxDemands = w._presolveCumulRule4MaxDemands;
                     wc._lnsTrainingObjectiveLimit = w._lnsTrainingObjectiveLimit;
                     wc._posAbsentRelated = w._posAbsentRelated;
                     wc._defaultCallbackBlockSize = w._defaultCallbackBlockSize;
@@ -7586,6 +7955,11 @@ namespace OptalCP
             if (overrides._lnsSkipNoImprovementProbability != null) dst._lnsSkipNoImprovementProbability = overrides._lnsSkipNoImprovementProbability;
             if (overrides._lnsSmallStructureLimit != null) dst._lnsSmallStructureLimit = overrides._lnsSmallStructureLimit;
             if (overrides._lnsResourceOptimization != null) dst._lnsResourceOptimization = overrides._lnsResourceOptimization;
+            if (overrides._lnsAbsentCoreWeight != null) dst._lnsAbsentCoreWeight = overrides._lnsAbsentCoreWeight;
+            if (overrides._arcWeightAbsentOverride != null) dst._arcWeightAbsentOverride = overrides._arcWeightAbsentOverride;
+            if (overrides._arcWeightAlternativeChosen != null) dst._arcWeightAlternativeChosen = overrides._arcWeightAlternativeChosen;
+            if (overrides._arcWeightAlternativeNotChosen != null) dst._arcWeightAlternativeNotChosen = overrides._arcWeightAlternativeNotChosen;
+            if (overrides._arcWeightTouchingPOS != null) dst._arcWeightTouchingPOS = overrides._arcWeightTouchingPOS;
             if (overrides._lnsRestoreAbsentIntervals != null) dst._lnsRestoreAbsentIntervals = overrides._lnsRestoreAbsentIntervals;
             if (overrides._lnsRestoreIntervalLengths != null) dst._lnsRestoreIntervalLengths = overrides._lnsRestoreIntervalLengths;
             if (overrides._lnsRestoreIntVarValues != null) dst._lnsRestoreIntVarValues = overrides._lnsRestoreIntVarValues;
@@ -7647,6 +8021,10 @@ namespace OptalCP
             if (overrides._lnsDisabledHeuristics != null) dst._lnsDisabledHeuristics = overrides._lnsDisabledHeuristics;
             if (overrides._setTimesNbExtendsFactor != null) dst._setTimesNbExtendsFactor = overrides._setTimesNbExtendsFactor;
             if (overrides._discreteLowCapacityLimit != null) dst._discreteLowCapacityLimit = overrides._discreteLowCapacityLimit;
+            if (overrides._presolveCumulRule1 != null) dst._presolveCumulRule1 = overrides._presolveCumulRule1;
+            if (overrides._presolveCumulRule2 != null) dst._presolveCumulRule2 = overrides._presolveCumulRule2;
+            if (overrides._presolveCumulRule3 != null) dst._presolveCumulRule3 = overrides._presolveCumulRule3;
+            if (overrides._presolveCumulRule4MaxDemands != null) dst._presolveCumulRule4MaxDemands = overrides._presolveCumulRule4MaxDemands;
             if (overrides._lnsTrainingObjectiveLimit != null) dst._lnsTrainingObjectiveLimit = overrides._lnsTrainingObjectiveLimit;
             if (overrides._posAbsentRelated != null) dst._posAbsentRelated = overrides._posAbsentRelated;
             if (overrides._defaultCallbackBlockSize != null) dst._defaultCallbackBlockSize = overrides._defaultCallbackBlockSize;
@@ -7748,6 +8126,11 @@ namespace OptalCP
                     if (ow._lnsSkipNoImprovementProbability != null) rw._lnsSkipNoImprovementProbability = ow._lnsSkipNoImprovementProbability;
                     if (ow._lnsSmallStructureLimit != null) rw._lnsSmallStructureLimit = ow._lnsSmallStructureLimit;
                     if (ow._lnsResourceOptimization != null) rw._lnsResourceOptimization = ow._lnsResourceOptimization;
+                    if (ow._lnsAbsentCoreWeight != null) rw._lnsAbsentCoreWeight = ow._lnsAbsentCoreWeight;
+                    if (ow._arcWeightAbsentOverride != null) rw._arcWeightAbsentOverride = ow._arcWeightAbsentOverride;
+                    if (ow._arcWeightAlternativeChosen != null) rw._arcWeightAlternativeChosen = ow._arcWeightAlternativeChosen;
+                    if (ow._arcWeightAlternativeNotChosen != null) rw._arcWeightAlternativeNotChosen = ow._arcWeightAlternativeNotChosen;
+                    if (ow._arcWeightTouchingPOS != null) rw._arcWeightTouchingPOS = ow._arcWeightTouchingPOS;
                     if (ow._lnsRestoreAbsentIntervals != null) rw._lnsRestoreAbsentIntervals = ow._lnsRestoreAbsentIntervals;
                     if (ow._lnsRestoreIntervalLengths != null) rw._lnsRestoreIntervalLengths = ow._lnsRestoreIntervalLengths;
                     if (ow._lnsRestoreIntVarValues != null) rw._lnsRestoreIntVarValues = ow._lnsRestoreIntVarValues;
@@ -7808,6 +8191,10 @@ namespace OptalCP
                     if (ow._lnsDisabledHeuristics != null) rw._lnsDisabledHeuristics = ow._lnsDisabledHeuristics;
                     if (ow._setTimesNbExtendsFactor != null) rw._setTimesNbExtendsFactor = ow._setTimesNbExtendsFactor;
                     if (ow._discreteLowCapacityLimit != null) rw._discreteLowCapacityLimit = ow._discreteLowCapacityLimit;
+                    if (ow._presolveCumulRule1 != null) rw._presolveCumulRule1 = ow._presolveCumulRule1;
+                    if (ow._presolveCumulRule2 != null) rw._presolveCumulRule2 = ow._presolveCumulRule2;
+                    if (ow._presolveCumulRule3 != null) rw._presolveCumulRule3 = ow._presolveCumulRule3;
+                    if (ow._presolveCumulRule4MaxDemands != null) rw._presolveCumulRule4MaxDemands = ow._presolveCumulRule4MaxDemands;
                     if (ow._lnsTrainingObjectiveLimit != null) rw._lnsTrainingObjectiveLimit = ow._lnsTrainingObjectiveLimit;
                     if (ow._posAbsentRelated != null) rw._posAbsentRelated = ow._posAbsentRelated;
                     if (ow._defaultCallbackBlockSize != null) rw._defaultCallbackBlockSize = ow._defaultCallbackBlockSize;
@@ -8786,6 +9173,36 @@ namespace OptalCP
         public bool? _lnsResourceOptimization { get; set; }
 
         /// <summary>
+        /// Core weight for absent intervals in LNS neighborhoods
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public double? _lnsAbsentCoreWeight { get; set; }
+
+        /// <summary>
+        /// Relationship weight for absent-override arcs in POS
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public double? _arcWeightAbsentOverride { get; set; }
+
+        /// <summary>
+        /// Relationship weight for alternative main-option arcs when the option is chosen in the current solution
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public double? _arcWeightAlternativeChosen { get; set; }
+
+        /// <summary>
+        /// Relationship weight for alternative main-option arcs when the option is not chosen in the current solution
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public double? _arcWeightAlternativeNotChosen { get; set; }
+
+        /// <summary>
+        /// Relationship weight for touching POS arcs in noOverlap
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public double? _arcWeightTouchingPOS { get; set; }
+
+        /// <summary>
         /// Whether to restore absent interval variables in LNS steps
         /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
@@ -9166,6 +9583,30 @@ namespace OptalCP
         /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         public long? _discreteLowCapacityLimit { get; set; }
+
+        /// <summary>
+        /// Schulz R1: saturate near-full pulses to C
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public bool? _presolveCumulRule1 { get; set; }
+
+        /// <summary>
+        /// Schulz R2: GCD reduction of pulse heights
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public bool? _presolveCumulRule2 { get; set; }
+
+        /// <summary>
+        /// Schulz R3: knapsack reduction of C
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public bool? _presolveCumulRule3 { get; set; }
+
+        /// <summary>
+        /// Schulz R4 max demands per resource (0 = always skip)
+        /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        public long? _presolveCumulRule4MaxDemands { get; set; }
 
         /// <summary>
         /// Objective value to start LNS training
@@ -9752,6 +10193,66 @@ namespace OptalCP
                 result["_lnsResourceOptimization"] = _lnsResourceOptimization;
             }
 
+            if (_lnsAbsentCoreWeight != null)
+            {
+                if (_lnsAbsentCoreWeight < 0 || _lnsAbsentCoreWeight > 10)
+                    throw new ArgumentException($"Value {_lnsAbsentCoreWeight} for parameter LNSAbsentCoreWeight is out of range [0, 10]");
+                if (double.IsPositiveInfinity(_lnsAbsentCoreWeight.Value))
+                    result["_lnsAbsentCoreWeight"] = "Infinity";
+                else if (double.IsNegativeInfinity(_lnsAbsentCoreWeight.Value))
+                    result["_lnsAbsentCoreWeight"] = "-Infinity";
+                else
+                    result["_lnsAbsentCoreWeight"] = _lnsAbsentCoreWeight;
+            }
+
+            if (_arcWeightAbsentOverride != null)
+            {
+                if (_arcWeightAbsentOverride < 0 || _arcWeightAbsentOverride > 10)
+                    throw new ArgumentException($"Value {_arcWeightAbsentOverride} for parameter ArcWeightAbsentOverride is out of range [0, 10]");
+                if (double.IsPositiveInfinity(_arcWeightAbsentOverride.Value))
+                    result["_arcWeightAbsentOverride"] = "Infinity";
+                else if (double.IsNegativeInfinity(_arcWeightAbsentOverride.Value))
+                    result["_arcWeightAbsentOverride"] = "-Infinity";
+                else
+                    result["_arcWeightAbsentOverride"] = _arcWeightAbsentOverride;
+            }
+
+            if (_arcWeightAlternativeChosen != null)
+            {
+                if (_arcWeightAlternativeChosen < 0 || _arcWeightAlternativeChosen > 10)
+                    throw new ArgumentException($"Value {_arcWeightAlternativeChosen} for parameter ArcWeightAlternativeChosen is out of range [0, 10]");
+                if (double.IsPositiveInfinity(_arcWeightAlternativeChosen.Value))
+                    result["_arcWeightAlternativeChosen"] = "Infinity";
+                else if (double.IsNegativeInfinity(_arcWeightAlternativeChosen.Value))
+                    result["_arcWeightAlternativeChosen"] = "-Infinity";
+                else
+                    result["_arcWeightAlternativeChosen"] = _arcWeightAlternativeChosen;
+            }
+
+            if (_arcWeightAlternativeNotChosen != null)
+            {
+                if (_arcWeightAlternativeNotChosen < 0 || _arcWeightAlternativeNotChosen > 10)
+                    throw new ArgumentException($"Value {_arcWeightAlternativeNotChosen} for parameter ArcWeightAlternativeNotChosen is out of range [0, 10]");
+                if (double.IsPositiveInfinity(_arcWeightAlternativeNotChosen.Value))
+                    result["_arcWeightAlternativeNotChosen"] = "Infinity";
+                else if (double.IsNegativeInfinity(_arcWeightAlternativeNotChosen.Value))
+                    result["_arcWeightAlternativeNotChosen"] = "-Infinity";
+                else
+                    result["_arcWeightAlternativeNotChosen"] = _arcWeightAlternativeNotChosen;
+            }
+
+            if (_arcWeightTouchingPOS != null)
+            {
+                if (_arcWeightTouchingPOS < 0 || _arcWeightTouchingPOS > 100)
+                    throw new ArgumentException($"Value {_arcWeightTouchingPOS} for parameter ArcWeightTouchingPOS is out of range [0, 100]");
+                if (double.IsPositiveInfinity(_arcWeightTouchingPOS.Value))
+                    result["_arcWeightTouchingPOS"] = "Infinity";
+                else if (double.IsNegativeInfinity(_arcWeightTouchingPOS.Value))
+                    result["_arcWeightTouchingPOS"] = "-Infinity";
+                else
+                    result["_arcWeightTouchingPOS"] = _arcWeightTouchingPOS;
+            }
+
             if (_lnsRestoreAbsentIntervals != null)
             {
                 result["_lnsRestoreAbsentIntervals"] = _lnsRestoreAbsentIntervals;
@@ -10236,6 +10737,26 @@ namespace OptalCP
                 if (_discreteLowCapacityLimit < 0 || _discreteLowCapacityLimit > 16)
                     throw new ArgumentException($"Value {_discreteLowCapacityLimit} for parameter DiscreteLowCapacityLimit is out of range [0, 16]");
                 result["_discreteLowCapacityLimit"] = _discreteLowCapacityLimit;
+            }
+
+            if (_presolveCumulRule1 != null)
+            {
+                result["_presolveCumulRule1"] = _presolveCumulRule1;
+            }
+
+            if (_presolveCumulRule2 != null)
+            {
+                result["_presolveCumulRule2"] = _presolveCumulRule2;
+            }
+
+            if (_presolveCumulRule3 != null)
+            {
+                result["_presolveCumulRule3"] = _presolveCumulRule3;
+            }
+
+            if (_presolveCumulRule4MaxDemands != null)
+            {
+                result["_presolveCumulRule4MaxDemands"] = _presolveCumulRule4MaxDemands;
             }
 
             if (_lnsTrainingObjectiveLimit != null)
@@ -11088,6 +11609,81 @@ namespace OptalCP
                 }
             }
 
+            if (data.TryGetValue("_lnsAbsentCoreWeight", out var lnsAbsentCoreWeightVal) && lnsAbsentCoreWeightVal != null)
+            {
+                if (lnsAbsentCoreWeightVal is System.Text.Json.JsonElement lnsAbsentCoreWeightElem)
+                {
+                    if (lnsAbsentCoreWeightElem.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        wp._lnsAbsentCoreWeight = lnsAbsentCoreWeightElem.GetDouble();
+                    else if (lnsAbsentCoreWeightElem.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var str = lnsAbsentCoreWeightElem.GetString();
+                        if (str == "Infinity") wp._lnsAbsentCoreWeight = double.PositiveInfinity;
+                        else if (str == "-Infinity") wp._lnsAbsentCoreWeight = double.NegativeInfinity;
+                    }
+                }
+            }
+
+            if (data.TryGetValue("_arcWeightAbsentOverride", out var arcWeightAbsentOverrideVal) && arcWeightAbsentOverrideVal != null)
+            {
+                if (arcWeightAbsentOverrideVal is System.Text.Json.JsonElement arcWeightAbsentOverrideElem)
+                {
+                    if (arcWeightAbsentOverrideElem.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        wp._arcWeightAbsentOverride = arcWeightAbsentOverrideElem.GetDouble();
+                    else if (arcWeightAbsentOverrideElem.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var str = arcWeightAbsentOverrideElem.GetString();
+                        if (str == "Infinity") wp._arcWeightAbsentOverride = double.PositiveInfinity;
+                        else if (str == "-Infinity") wp._arcWeightAbsentOverride = double.NegativeInfinity;
+                    }
+                }
+            }
+
+            if (data.TryGetValue("_arcWeightAlternativeChosen", out var arcWeightAlternativeChosenVal) && arcWeightAlternativeChosenVal != null)
+            {
+                if (arcWeightAlternativeChosenVal is System.Text.Json.JsonElement arcWeightAlternativeChosenElem)
+                {
+                    if (arcWeightAlternativeChosenElem.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        wp._arcWeightAlternativeChosen = arcWeightAlternativeChosenElem.GetDouble();
+                    else if (arcWeightAlternativeChosenElem.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var str = arcWeightAlternativeChosenElem.GetString();
+                        if (str == "Infinity") wp._arcWeightAlternativeChosen = double.PositiveInfinity;
+                        else if (str == "-Infinity") wp._arcWeightAlternativeChosen = double.NegativeInfinity;
+                    }
+                }
+            }
+
+            if (data.TryGetValue("_arcWeightAlternativeNotChosen", out var arcWeightAlternativeNotChosenVal) && arcWeightAlternativeNotChosenVal != null)
+            {
+                if (arcWeightAlternativeNotChosenVal is System.Text.Json.JsonElement arcWeightAlternativeNotChosenElem)
+                {
+                    if (arcWeightAlternativeNotChosenElem.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        wp._arcWeightAlternativeNotChosen = arcWeightAlternativeNotChosenElem.GetDouble();
+                    else if (arcWeightAlternativeNotChosenElem.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var str = arcWeightAlternativeNotChosenElem.GetString();
+                        if (str == "Infinity") wp._arcWeightAlternativeNotChosen = double.PositiveInfinity;
+                        else if (str == "-Infinity") wp._arcWeightAlternativeNotChosen = double.NegativeInfinity;
+                    }
+                }
+            }
+
+            if (data.TryGetValue("_arcWeightTouchingPOS", out var arcWeightTouchingPOSVal) && arcWeightTouchingPOSVal != null)
+            {
+                if (arcWeightTouchingPOSVal is System.Text.Json.JsonElement arcWeightTouchingPOSElem)
+                {
+                    if (arcWeightTouchingPOSElem.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        wp._arcWeightTouchingPOS = arcWeightTouchingPOSElem.GetDouble();
+                    else if (arcWeightTouchingPOSElem.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var str = arcWeightTouchingPOSElem.GetString();
+                        if (str == "Infinity") wp._arcWeightTouchingPOS = double.PositiveInfinity;
+                        else if (str == "-Infinity") wp._arcWeightTouchingPOS = double.NegativeInfinity;
+                    }
+                }
+            }
+
             if (data.TryGetValue("_lnsRestoreAbsentIntervals", out var lnsRestoreAbsentIntervalsVal) && lnsRestoreAbsentIntervalsVal != null)
             {
                 if (lnsRestoreAbsentIntervalsVal is System.Text.Json.JsonElement lnsRestoreAbsentIntervalsElem)
@@ -11777,6 +12373,48 @@ namespace OptalCP
                 {
                     if (discreteLowCapacityLimitElem.ValueKind == System.Text.Json.JsonValueKind.Number)
                         wp._discreteLowCapacityLimit = discreteLowCapacityLimitElem.GetInt64();
+                }
+            }
+
+            if (data.TryGetValue("_presolveCumulRule1", out var presolveCumulRule1Val) && presolveCumulRule1Val != null)
+            {
+                if (presolveCumulRule1Val is System.Text.Json.JsonElement presolveCumulRule1Elem)
+                {
+                    if (presolveCumulRule1Elem.ValueKind == System.Text.Json.JsonValueKind.True)
+                        wp._presolveCumulRule1 = true;
+                    else if (presolveCumulRule1Elem.ValueKind == System.Text.Json.JsonValueKind.False)
+                        wp._presolveCumulRule1 = false;
+                }
+            }
+
+            if (data.TryGetValue("_presolveCumulRule2", out var presolveCumulRule2Val) && presolveCumulRule2Val != null)
+            {
+                if (presolveCumulRule2Val is System.Text.Json.JsonElement presolveCumulRule2Elem)
+                {
+                    if (presolveCumulRule2Elem.ValueKind == System.Text.Json.JsonValueKind.True)
+                        wp._presolveCumulRule2 = true;
+                    else if (presolveCumulRule2Elem.ValueKind == System.Text.Json.JsonValueKind.False)
+                        wp._presolveCumulRule2 = false;
+                }
+            }
+
+            if (data.TryGetValue("_presolveCumulRule3", out var presolveCumulRule3Val) && presolveCumulRule3Val != null)
+            {
+                if (presolveCumulRule3Val is System.Text.Json.JsonElement presolveCumulRule3Elem)
+                {
+                    if (presolveCumulRule3Elem.ValueKind == System.Text.Json.JsonValueKind.True)
+                        wp._presolveCumulRule3 = true;
+                    else if (presolveCumulRule3Elem.ValueKind == System.Text.Json.JsonValueKind.False)
+                        wp._presolveCumulRule3 = false;
+                }
+            }
+
+            if (data.TryGetValue("_presolveCumulRule4MaxDemands", out var presolveCumulRule4MaxDemandsVal) && presolveCumulRule4MaxDemandsVal != null)
+            {
+                if (presolveCumulRule4MaxDemandsVal is System.Text.Json.JsonElement presolveCumulRule4MaxDemandsElem)
+                {
+                    if (presolveCumulRule4MaxDemandsElem.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        wp._presolveCumulRule4MaxDemands = presolveCumulRule4MaxDemandsElem.GetInt64();
                 }
             }
 

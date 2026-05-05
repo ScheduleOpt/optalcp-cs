@@ -1,6 +1,6 @@
 // ===========================================================================
 // OptalCP C# API - Solver
-// Version: 2026.3.0
+// Version: 2026.4.0
 // ===========================================================================
 
 using System;
@@ -143,7 +143,7 @@ namespace OptalCP
     /// </remarks>
     public class Solver : IDisposable
     {
-        internal const string Version = "2026.3.0";
+        internal const string Version = "2026.4.0";
         
         private Process? _process;
         private StreamWriter? _stdin;

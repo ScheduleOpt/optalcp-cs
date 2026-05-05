@@ -1,6 +1,6 @@
 // ===========================================================================
 // OptalCP C# API - Scheduling Types (IntervalVar, SequenceVar, IntStepFunction)
-// Version: 2026.3.0
+// Version: 2026.4.0
 // ===========================================================================
 
 using System;
