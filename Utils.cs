@@ -1,6 +1,6 @@
 // ===========================================================================
 // OptalCP C# API - Internal Utilities
-// Version: 2026.4.0
+// Version: 2026.11.0
 // ===========================================================================
 
 using System;
@@ -46,7 +46,7 @@ namespace OptalCP
             if (outputWriter == Console.Out && !Console.IsOutputRedirected)
             {
                 // On Windows, try to enable ANSI support
-                if (OperatingSystem.IsWindows())
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                     return EnableWindowsAnsi();
                 return true;
             }

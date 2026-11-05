@@ -37,6 +37,17 @@ Install the preview edition:
 dotnet add package OptalCP.Bin.Preview
 ```
 
+## Supported Frameworks
+
+The package contains two builds, and NuGet picks the matching one:
+
+- `net10.0` for .NET 10 and newer.
+- `netstandard2.0` for .NET Framework 4.7.2 and newer, and for .NET older than 10.
+
+On .NET Framework, the package depends on `System.Text.Json` from NuGet.
+Projects that use `packages.config` need binding redirects for its dependencies.
+Set `<AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>` in the project file.
+
 ## Full and Academic Editions
 
 For full functionality with solution details:
@@ -44,7 +55,7 @@ For full functionality with solution details:
 - **Full edition** (`OptalCP.Bin`): Commercial license, requires GitHub authentication
 - **Academic edition** (`OptalCP.Bin.Academic`): **Free for academic use**, requires GitHub authentication
 
-Contact [ScheduleOpt](https://optalcp.com) for licensing options. Academic licenses are provided free of charge for qualified academic institutions.
+Contact [Optal](https://optalcp.com) for licensing options. Academic licenses are provided free of charge for qualified academic institutions.
 
 ## Documentation
 

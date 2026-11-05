@@ -1,6 +1,6 @@
 // ===========================================================================
 // OptalCP C# API - Scheduling Types (IntervalVar, SequenceVar, IntStepFunction)
-// Version: 2026.4.0
+// Version: 2026.11.0
 // ===========================================================================
 
 using System;
@@ -192,7 +192,7 @@ namespace OptalCP
         /// var model = new Model();
         /// var task = model.IntervalVar(length: 10, name: "task");
         ///
-        /// Console.WriteLine(task.EndMin);  // 10 (StartMin + length)
+        /// Console.WriteLine(task.EndMin);  // -715827882 (IntervalMin, the default)
         ///
         /// task.EndMin = 20;
         /// Console.WriteLine(task.EndMin);  // 20
@@ -208,7 +208,7 @@ namespace OptalCP
         /// </remarks>
         public int EndMin
         {
-            get => _props.TryGetValue("endMin", out var v) ? Convert.ToInt32(v) : 0;
+            get => _props.TryGetValue("endMin", out var v) ? Convert.ToInt32(v) : Model.IntervalMin;
             set => _props["endMin"] = value;
         }
 
@@ -525,9 +525,6 @@ namespace OptalCP
             return new IntExpr(_model, "lengthOf", outParams);
         }
 
-        /// <summary>
-        /// Creates a _alternativeCost expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal IntExpr AlternativeCost(IEnumerable<IntervalVar> options, IEnumerable<int> weights)
         {
@@ -837,7 +834,7 @@ namespace OptalCP
         /// <param name="options">The interval variables to choose from.</param>
         /// <returns>The alternative constraint.</returns>
         /// <remarks>
-        /// The alternative constraint requires that exactly one of the <c>options</c> intervals
+        /// The alternative constraint requires that exactly one entry of <c>options</c>
         /// is present when <c>self</c> is present. The selected option must have the same
         /// start, end, and length as <c>self</c>. If <c>self</c> is absent, all options must be absent.
         ///
@@ -880,11 +877,13 @@ namespace OptalCP
         /// <param name="sequence">The sequence variable.</param>
         /// <returns>The resulting integer expression</returns>
         /// <remarks>
-        /// Returns an integer expression representing the 0-based position of this interval
-        /// in the given sequence. The position reflects the order in which intervals appear
-        /// after applying the <see cref="SequenceVar.NoOverlap">SequenceVar.NoOverlap</see> constraint.
+        /// In the solution, the present interval that is scheduled first in the <c>sequence</c> has position 0, the second one has position 1, etc. Absent intervals are not counted. If this interval is absent, the position expression is also absent.
         ///
-        /// If this interval is absent, the position expression is also absent.
+        /// The <c>position</c> expression has the following requirements:
+        ///
+        /// * The <c>sequence</c> must be used in a <see cref="SequenceVar.NoOverlap">SequenceVar.NoOverlap</see> constraint.
+        /// * This interval must appear exactly once in the <c>sequence</c>.
+        /// * This interval cannot have zero length, i.e., its minimum length must be at least 1. Otherwise, the position of two simultaneous zero-length intervals would be undefined.
         ///
         /// This method is equivalent to <see cref="Model.Position">Model.Position</see> with <c>self</c> as the interval.
         /// </remarks>
@@ -1007,9 +1006,6 @@ namespace OptalCP
             return new CumulExpr(_model, "stepAtEnd", outParams);
         }
 
-        /// <summary>
-        /// Creates a _precedenceEnergy expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint PrecedenceEnergyBefore(IEnumerable<IntervalVar> others, IEnumerable<int> heights, int capacity)
         {
@@ -1017,9 +1013,6 @@ namespace OptalCP
             return new Constraint(_model, "precedenceEnergyBefore", outParams);
         }
 
-        /// <summary>
-        /// Creates a _precedenceEnergy expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint PrecedenceEnergyAfter(IEnumerable<IntervalVar> others, IEnumerable<int> heights, int capacity)
         {
@@ -1125,18 +1118,25 @@ namespace OptalCP
         }
 
         /// <summary>
-        /// Constrains the end of an interval variable to not coincide with zero segments of a step function.
+        /// Constrains the last time point of an interval variable (end - 1) to not coincide with zero segments of a step function.
         /// </summary>
-        /// <param name="func">The step function whose zero segments define forbidden end times.</param>
+        /// <param name="func">The step function whose zero segments define forbidden values of end - 1.</param>
         /// <returns>The constraint forbidding the end point.</returns>
         /// <remarks>
         /// This function is equivalent to:
         ///
         /// <code>
-        ///   model.Enforce(func.Eval(interval.End()) != 0);
+        ///   model.Enforce(func.Eval(interval.End() - 1) != 0);
         /// </code>
         ///
-        /// I.e., the function value at the end of the interval variable cannot be zero.
+        /// I.e., the function value at <c>end - 1</c> cannot be zero. The end of an interval
+        /// variable is exclusive, so <c>end - 1</c> is the last time point the interval covers.
+        /// A zero-length interval covers no time point, but the constraint still checks
+        /// <c>end - 1</c> for it.
+        ///
+        /// The constraint cannot be used inside a boolean expression. To combine the
+        /// condition with other conditions (e.g. in a disjunction), use the <c>eval</c> expression
+        /// above instead.
         ///
         /// @example A delivery task that must complete during business hours (not during lunch break):
         ///
@@ -1146,7 +1146,7 @@ namespace OptalCP
         /// // A 1-hour delivery task
         /// var delivery = model.IntervalVar(length: 1, name: "delivery");
         ///
-        /// // Allowed end times: 1 = allowed, 0 = forbidden
+        /// // The last hour of the delivery: 1 = allowed, 0 = forbidden
         /// var allowedEnds = model.StepFunction(new[] {
         ///     (0, 0),   // Before 9h: forbidden
         ///     (9, 1),   // 9h: business opens, allowed
@@ -1155,12 +1155,12 @@ namespace OptalCP
         ///     (17, 0),  // 17h: business closes, forbidden
         /// });
         ///
-        /// // Delivery cannot end when allowedEnds is 0
+        /// // Delivery cannot end at t when allowedEnds is 0 at t - 1
         /// delivery.ForbidEnd(allowedEnds);
         /// model.Minimize(delivery.End());
         ///
         /// var result = model.Solve();
-        /// // Delivery ends at 9 (starts at 8, ends at earliest allowed time)
+        /// // Delivery ends at 10 (runs 9-10, the earliest allowed last hour)
         /// </code>
         ///
         /// See also:
@@ -1176,9 +1176,6 @@ namespace OptalCP
             return new Constraint(_model, "forbidEnd", outParams);
         }
 
-        /// <summary>
-        /// Creates a _disjunctiveIsBefore expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr DisjunctiveIsBefore(IntervalVar y)
         {
@@ -1186,9 +1183,6 @@ namespace OptalCP
             return new BoolExpr(_model, "disjunctiveIsBefore", outParams);
         }
 
-        /// <summary>
-        /// Creates a _related expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Directive Related(IntervalVar y)
         {
@@ -1351,9 +1345,6 @@ namespace OptalCP
             return new Constraint(_model, "noOverlap", args);
         }
 
-        /// <summary>
-        /// Creates a _sameSequence expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint SameSequence(SequenceVar sequence2)
         {
@@ -1378,7 +1369,7 @@ namespace OptalCP
     ///
     /// * Function <see cref="Model.Eval">Model.Eval</see> evaluates the function at the given point (given as <see cref="IntExpr">IntExpr</see>).
     /// * Function <see cref="Model.Integral">Model.Integral</see> computes a sum (integral) of the function over an <see cref="IntervalVar">IntervalVar</see>.
-    /// * Constraints <see cref="Model.ForbidStart">Model.ForbidStart</see> and <see cref="Model.ForbidEnd">Model.ForbidEnd</see> forbid the start/end of an <see cref="IntervalVar">IntervalVar</see> to be in a zero-value interval of the function.
+    /// * Constraint <see cref="Model.ForbidStart">Model.ForbidStart</see> forbids the start of an <see cref="IntervalVar">IntervalVar</see> to be in a zero-value interval of the function. Constraint <see cref="Model.ForbidEnd">Model.ForbidEnd</see> does the same for the last time point of the interval (end - 1).
     /// * Constraint <see cref="Model.ForbidExtent">Model.ForbidExtent</see> forbids the extent of an <see cref="IntervalVar">IntervalVar</see> to be in a zero-value interval of the function.
     /// </remarks>
     public class IntStepFunction : ModelElement
@@ -1422,9 +1413,6 @@ namespace OptalCP
             return new IntExpr(_model, "intStepFunctionIntegral", outParams);
         }
 
-        /// <summary>
-        /// Creates a _stepFunctionIntegralInRange expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint StepFunctionIntegralInRange(IntervalVar interval, int lb, int ub)
         {
@@ -1462,9 +1450,6 @@ namespace OptalCP
             return new IntExpr(_model, "intStepFunctionEval", outParams);
         }
 
-        /// <summary>
-        /// Creates a _stepFunctionEvalInRange expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint StepFunctionEvalInRange(IntExpr arg, int lb, int ub)
         {
@@ -1472,9 +1457,6 @@ namespace OptalCP
             return new Constraint(_model, "intStepFunctionEvalInRange", outParams);
         }
 
-        /// <summary>
-        /// Creates a _stepFunctionEvalInRange expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint StepFunctionEvalInRange(int arg, int lb, int ub)
         {
@@ -1482,9 +1464,6 @@ namespace OptalCP
             return new Constraint(_model, "intStepFunctionEvalInRange", outParams);
         }
 
-        /// <summary>
-        /// Creates a _stepFunctionEvalNotInRange expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint StepFunctionEvalNotInRange(IntExpr arg, int lb, int ub)
         {
@@ -1492,9 +1471,6 @@ namespace OptalCP
             return new Constraint(_model, "intStepFunctionEvalNotInRange", outParams);
         }
 
-        /// <summary>
-        /// Creates a _stepFunctionEvalNotInRange expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint StepFunctionEvalNotInRange(int arg, int lb, int ub)
         {
@@ -1524,9 +1500,6 @@ namespace OptalCP
         internal static object Wrap(StateFunction f) => f.AsArg();
 
         // Generated methods
-        /// <summary>
-        /// Creates a _alwaysEqual expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint AlwaysEqual(IntervalVar interval, int value)
         {

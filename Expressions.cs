@@ -1,6 +1,6 @@
 // ===========================================================================
 // OptalCP C# API - Expression Types
-// Version: 2026.4.0
+// Version: 2026.11.0
 // ===========================================================================
 
 using System;
@@ -815,9 +815,6 @@ namespace OptalCP
         public Objective Maximize()
             => _model.Maximize(this);
 
-        /// <summary>
-        /// Creates a _reusableIntExpr expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal IntExpr ReusableIntExpr()
         {
@@ -905,9 +902,6 @@ namespace OptalCP
             return new BoolExpr(_model, "intInRange", outParams);
         }
 
-        /// <summary>
-        /// Creates a _notInRange expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr NotInRange(int lb, int ub)
         {
@@ -1391,9 +1385,6 @@ namespace OptalCP
             _model.Enforce(this);
         }
 
-        /// <summary>
-        /// Creates a _reusableBoolExpr expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr ReusableBoolExpr()
         {
@@ -1485,9 +1476,6 @@ namespace OptalCP
             return new BoolExpr(_model, "boolImplies", outParams);
         }
 
-        /// <summary>
-        /// Creates a _eq expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Eq(BoolExpr rhs)
         {
@@ -1495,9 +1483,6 @@ namespace OptalCP
             return new BoolExpr(_model, "boolEq", outParams);
         }
 
-        /// <summary>
-        /// Creates a _eq expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Eq(bool rhs)
         {
@@ -1505,9 +1490,6 @@ namespace OptalCP
             return new BoolExpr(_model, "boolEq", outParams);
         }
 
-        /// <summary>
-        /// Creates a _ne expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Ne(BoolExpr rhs)
         {
@@ -1515,9 +1497,6 @@ namespace OptalCP
             return new BoolExpr(_model, "boolNe", outParams);
         }
 
-        /// <summary>
-        /// Creates a _ne expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Ne(bool rhs)
         {
@@ -1525,9 +1504,6 @@ namespace OptalCP
             return new BoolExpr(_model, "boolNe", outParams);
         }
 
-        /// <summary>
-        /// Creates a _nand expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Nand(BoolExpr rhs)
         {
@@ -1535,9 +1511,6 @@ namespace OptalCP
             return new BoolExpr(_model, "boolNand", outParams);
         }
 
-        /// <summary>
-        /// Creates a _nand expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Nand(bool rhs)
         {
@@ -1895,9 +1868,6 @@ namespace OptalCP
         public static Constraint operator >=(IntExpr lhs, CumulExpr rhs)
             => new Constraint(rhs._model, "cumulLe", new object[] { rhs.AsArg(), IntExpr.Wrap(lhs) });
 
-        /// <summary>
-        /// Creates a _cumulMaxProfile expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint CumulMaxProfile(IntStepFunction profile)
         {
@@ -1905,9 +1875,6 @@ namespace OptalCP
             return new Constraint(_model, "cumulMaxProfile", outParams);
         }
 
-        /// <summary>
-        /// Creates a _cumulMinProfile expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint CumulMinProfile(IntStepFunction profile)
         {

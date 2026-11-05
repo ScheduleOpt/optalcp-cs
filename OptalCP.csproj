@@ -1,19 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <!-- netstandard2.0 serves .NET Framework consumers. Compat.cs shims the
+         framework APIs it lacks. -->
+    <TargetFrameworks>net10.0;netstandard2.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>12.0</LangVersion>
 
     <!-- NuGet Package Metadata -->
     <PackageId>OptalCP</PackageId>
-    <Version>2026.4.0</Version>
-    <Company>OptalCP</Company>
+    <Version>2026.11.0</Version>
+    <Company>Optal SAS</Company>
     <Product>OptalCP</Product>
     <Description>C# API for OptalCP constraint programming solver</Description>
     <PackageTags>constraint-programming;optimization;scheduling;solver;operations-research</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <RepositoryUrl>https://github.com/ScheduleOpt/optalcp-cs</RepositoryUrl>
 
     <!-- Package settings -->
@@ -27,9 +30,15 @@
     <NoWarn>CS0419</NoWarn>
   </PropertyGroup>
 
-  <!-- Include README in package -->
+  <!-- netstandard2.0 has no in-box System.Text.Json -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="System.Text.Json" Version="10.0.12" />
+  </ItemGroup>
+
+  <!-- Include README and LICENSE in package -->
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="LICENSE.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <!-- Expose internals to the test project -->

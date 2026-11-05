@@ -1,6 +1,6 @@
 // ===========================================================================
 // OptalCP C# API - Solver
-// Version: 2026.4.0
+// Version: 2026.11.0
 // ===========================================================================
 
 using System;
@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -122,6 +123,11 @@ namespace OptalCP
     ///
     /// using var solver = new Solver();
     ///
+    /// // Call Stop() at most once: more solutions may be found before the graceful
+    /// // stop takes effect, and a second Stop() during the same solve force-kills
+    /// // the solver process.
+    /// bool stopRequested = false;
+    ///
     /// // Define solution handler:
     /// solver.OnSolution = (evt) =&gt;
     /// {
@@ -132,7 +138,11 @@ namespace OptalCP
     ///     else
     ///         Console.WriteLine("  x is absent");
     ///     // Request the solver to stop:
-    ///     solver.Stop("We are happy with the first solution.");
+    ///     if (!stopRequested)
+    ///     {
+    ///         stopRequested = true;
+    ///         solver.Stop("We are happy with the first solution.");
+    ///     }
     ///     return Task.CompletedTask;
     /// };
     ///
@@ -143,20 +153,32 @@ namespace OptalCP
     /// </remarks>
     public class Solver : IDisposable
     {
-        internal const string Version = "2026.4.0";
+        /// <remarks>
+        /// The version of the API package (the language binding), such as <c>"1.0.0"</c>. It is
+        /// also reported as <see cref="SolverInfo.ApiVersion">SolverInfo.ApiVersion</see>, which may differ from
+        /// <see cref="SolverInfo.SolverVersion">SolverInfo.SolverVersion</see> (the version of the solver binary).
+        /// </remarks>
+        public const string ApiVersion = "2026.11.0";
         
         private Process? _process;
         private StreamWriter? _stdin;
         private StreamReader? _stdout;
         private StreamReader? _stderr;
+        // Reads _stderr into _stderrOutput until the solver closes it:
+        private Task? _stderrTask;
         private bool _disposed;
         private volatile bool _stopRequested;
         private volatile bool _solving;
         private bool _closing;
-        private readonly List<string> _pendingSolutions = new();
+        private readonly List<string> _pendingMessages = new();
         private bool _modelSent;
         private string? _syncTextResult;
+        // Captured from the handshake reply on every connection (see
+        // HandleHandshakeResponse); exposed via SolveResult.SolverInfo and GetSolverInfo.
+        private SolverInfo? _solverInfo;
         private Parameters? _currentParameters;
+        // Lines the solver wrote to stderr. On the async path ReadStderrAsync
+        // appends from another thread, so access goes under lock (_stderrOutput):
         private readonly List<string> _stderrOutput = new();
         private readonly List<string> _errors = new();
         internal TextWriter? OutputWriter { get; set; } = Console.Out;
@@ -441,6 +463,11 @@ namespace OptalCP
         ///
         /// using var solver = new Solver();
         ///
+        /// // Call Stop() at most once: more solutions may be found before the graceful
+        /// // stop takes effect, and a second Stop() during the same solve force-kills
+        /// // the solver process.
+        /// bool stopRequested = false;
+        ///
         /// // Define solution handler:
         /// solver.OnSolution = (evt) =&gt;
         /// {
@@ -451,7 +478,11 @@ namespace OptalCP
         ///     else
         ///         Console.WriteLine("  x is absent");
         ///     // Request the solver to stop:
-        ///     solver.Stop("We are happy with the first solution.");
+        ///     if (!stopRequested)
+        ///     {
+        ///         stopRequested = true;
+        ///         solver.Stop("We are happy with the first solution.");
+        ///     }
         ///     return Task.CompletedTask;
         /// };
         ///
@@ -486,6 +517,10 @@ namespace OptalCP
         ///
         /// Requesting a stop on a solver that has already stopped has no effect.
         ///
+        /// Calling <c>stop</c> a second time during the same solve force-kills the solver
+        /// process immediately, as a safety measure in case the graceful stop does not
+        /// take effect.
+        ///
         /// <para>Example:</para>
         /// <example>
         /// In the following example, we issue a stop command 1 minute after the first
@@ -519,21 +554,30 @@ namespace OptalCP
             // Second call to stop - kill immediately as a safety measure
             if (_stopRequested)
             {
-                try { _process.Kill(entireProcessTree: true); } catch { }
+                try { Compat.KillTree(_process); } catch { }
                 return;
             }
 
             // First call - try graceful stop via stop message
             _stopRequested = true;
+            var stopMsg = JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["msg"] = "stop",
+                ["reason"] = reason
+            });
+            if (!_modelSent)
+            {
+                // The solve command was not written yet (e.g. still waiting for
+                // the handshake response). Writing "stop" now would land in the
+                // command slot and the solver would report a protocol error.
+                // Queue it instead; it is flushed right after the command.
+                _pendingMessages.Add(stopMsg);
+                return;
+            }
             if (_stdin != null)
             {
                 try
                 {
-                    var stopMsg = JsonSerializer.Serialize(new Dictionary<string, object?>
-                    {
-                        ["msg"] = "stop",
-                        ["reason"] = reason
-                    });
                     _stdin.WriteLine(stopMsg);
                     _stdin.Flush();
                 }
@@ -582,7 +626,7 @@ namespace OptalCP
             }
             else
             {
-                _pendingSolutions.Add(json);
+                _pendingMessages.Add(json);
             }
         }
 
@@ -602,6 +646,12 @@ namespace OptalCP
         /// Communication with the solver subprocess happens through the event loop.
         /// The user code must yield control (using <c>await</c> or waiting for an event)
         /// for the solver to receive commands and send updates.
+        ///
+        /// Do not block on the returned task (<c>.Result</c>, <c>.Wait()</c>) on a thread with a
+        /// <c>SynchronizationContext</c>, such as a WinForms or WPF UI thread or a classic
+        /// ASP.NET request thread. The solve continues on that thread, so blocking it
+        /// deadlocks. Await the task instead, or call <see cref="Model.Solve">Model.Solve</see>, which blocks
+        /// safely.
         ///
         /// <b>Warm start and external solutions</b>
         ///
@@ -639,8 +689,9 @@ namespace OptalCP
             _stopRequested = false;
             _closing = false;
             _modelSent = false;
-            _pendingSolutions.Clear();
-            _stderrOutput.Clear();
+            _pendingMessages.Clear();
+            lock (_stderrOutput)
+                _stderrOutput.Clear();
             _errors.Clear();
             var result = new SolveResult();
             var keyboardInterruptCount = 0;
@@ -670,31 +721,7 @@ namespace OptalCP
             {
                 await StartProcessAsync();
 
-                // Send handshake
-                await SendMessageAsync(new Dictionary<string, object?>
-                {
-                    ["msg"] = "handshake",
-                    ["version"] = Version,
-                    ["colors"] = CanUseColors()
-                });
-
-                // Read and validate handshake response
-                var handshakeResponse = await ReadMessageWithTimeoutAsync(HandshakeTimeout);
-                if (handshakeResponse == null)
-                {
-                    throw new InvalidOperationException("Solver closed unexpectedly during handshake");
-                }
-
-                var handshakeMsgType = GetString(handshakeResponse, "msg");
-                if (handshakeMsgType == "error")
-                {
-                    var errorData = GetString(handshakeResponse, "data");
-                    throw new InvalidOperationException($"Solver error: {errorData}");
-                }
-                if (handshakeMsgType != "handshake")
-                {
-                    throw new InvalidOperationException($"Unexpected handshake response: {handshakeResponse}");
-                }
+                await HandshakeAsync(CanUseColors());
 
                 // Send solve request
                 // Batch when no callbacks registered for solution or objective bound
@@ -702,12 +729,12 @@ namespace OptalCP
                 var solveMsg = BuildSolveMessage(model, @params, warmStart, batchResults);
                 await SendMessageAsync(solveMsg);
                 _modelSent = true;
-                foreach (var pendingJson in _pendingSolutions)
+                foreach (var pendingJson in _pendingMessages)
                 {
                     await _stdin!.WriteLineAsync(pendingJson);
-                    await _stdin.FlushAsync(CancellationToken.None);
+                    await _stdin.FlushAsync();
                 }
-                _pendingSolutions.Clear();
+                _pendingMessages.Clear();
 
                 // Read responses until summary
                 while (true)
@@ -773,7 +800,7 @@ namespace OptalCP
 
                         case "log":
                             var logData = GetString(response, "data");
-                            if (!string.IsNullOrEmpty(logData))
+                            if (logData is { Length: > 0 })
                             {
                                 OutputWriter?.Write(logData);
                                 OutputWriter?.Flush();
@@ -783,7 +810,7 @@ namespace OptalCP
 
                         case "warning":
                             var warnData = GetString(response, "data");
-                            if (!string.IsNullOrEmpty(warnData))
+                            if (warnData is { Length: > 0 })
                             {
                                 var warnPrefix = GetString(response, "prefix") ?? "";
                                 OutputWriter?.Write($"{warnPrefix}{warnData}");
@@ -808,11 +835,9 @@ namespace OptalCP
                 var exitCode = StopProcess();
 
                 // Check if stderr had output (indicates solver crash/error)
-                if (_stderrOutput.Count > 0)
-                {
-                    var stderrText = string.Join("\n", _stderrOutput);
+                var stderrText = GetStderrText();
+                if (stderrText.Length > 0)
                     throw new InvalidOperationException($"Solver error:\n{stderrText}");
-                }
 
                 // Check if we accumulated errors during solving
                 if (_errors.Count > 0)
@@ -956,30 +981,7 @@ namespace OptalCP
             try
             {
                 await StartProcessAsync();
-                await SendMessageAsync(new Dictionary<string, object?>
-                {
-                    ["msg"] = "handshake",
-                    ["version"] = Version,
-                    ["colors"] = CanUseColors()
-                });
-
-                // Read and validate handshake response
-                var handshakeResponse = await ReadMessageWithTimeoutAsync(HandshakeTimeout);
-                if (handshakeResponse == null)
-                {
-                    throw new InvalidOperationException("Solver closed unexpectedly during handshake");
-                }
-
-                var handshakeMsgType = GetString(handshakeResponse, "msg");
-                if (handshakeMsgType == "error")
-                {
-                    var errorData = GetString(handshakeResponse, "data");
-                    throw new InvalidOperationException($"Solver error: {errorData}");
-                }
-                if (handshakeMsgType != "handshake")
-                {
-                    throw new InvalidOperationException($"Unexpected handshake response: {handshakeResponse}");
-                }
+                await HandshakeAsync(CanUseColors());
 
                 var msg = BuildSolveMessage(model, parameters, warmStart);
                 msg["msg"] = command;
@@ -1119,9 +1121,12 @@ namespace OptalCP
             result.NbIntervalVars = (int)(GetLong(data, "nbIntervalVars") ?? 0);
             result.NbConstraints = (int)(GetLong(data, "nbConstraints") ?? 0);
             result.ActualWorkers = (int)(GetLong(data, "nbWorkers") ?? 0);
+#pragma warning disable CS0618 // Solver is deprecated; still populated for backward compatibility.
             result.Solver = GetString(data, "solver") ?? "";
+#pragma warning restore CS0618
             result.Cpu = GetString(data, "cpu") ?? "";
             result.ObjectiveSense = GetString(data, "objectiveSense");
+            result.SolverInfo = _solverInfo;
 
             if (data.TryGetValue("lowerBound", out var lb) && lb != null)
                 result.ObjectiveBound = ConvertToLong(lb);
@@ -1144,8 +1149,8 @@ namespace OptalCP
                 // Update SolutionTime and SolutionValid from last entry
                 if (objectiveHistory.Count > 0)
                 {
-                    result.SolutionTime = objectiveHistory[^1].SolveTime;
-                    result.SolutionValid = objectiveHistory[^1].Valid;
+                    result.SolutionTime = objectiveHistory[objectiveHistory.Count - 1].SolveTime;
+                    result.SolutionValid = objectiveHistory[objectiveHistory.Count - 1].Valid;
                 }
             }
 
@@ -1162,7 +1167,7 @@ namespace OptalCP
                 }
                 // Update BoundTime from last entry
                 if (boundHistory.Count > 0)
-                    result.BoundTime = boundHistory[^1].SolveTime;
+                    result.BoundTime = boundHistory[boundHistory.Count - 1].SolveTime;
             }
 
             // Handle batched solution values (when batchResults was true)
@@ -1176,6 +1181,123 @@ namespace OptalCP
                     ["objective"] = data.TryGetValue("objective", out var solObj) ? solObj : null
                 };
                 result.Solution.InitFromDict(solutionData);
+            }
+        }
+
+        /// <summary>
+        /// Queries the solver for its version and edition.
+        /// </summary>
+        /// <param name="params">Optional solver parameters.</param>
+        /// <returns>The solver's version and edition information.</returns>
+        /// <remarks>
+        /// Returns the solver's <see cref="SolverInfo">SolverInfo</see> without solving a model. The solver is
+        /// located via <see cref="Parameters.solver">Parameters.solver</see> or the <c>OPTALCP_SOLVER</c> environment
+        /// variable, exactly as when solving.
+        ///
+        /// <code>
+        /// using OptalCP;
+        ///
+        /// SolverInfo info = await Solver.GetSolverInfo();
+        /// Console.WriteLine($"Solver {info.SolverVersion} ({info.Edition})");
+        /// if (info.ValuesMasked)
+        ///     Console.WriteLine("Preview edition: solution values are masked.");
+        /// </code>
+        ///
+        /// See also:
+        /// <list type="bullet">
+        /// <item><description><see cref="SolverInfo">SolverInfo</see> — for the returned fields.</description></item>
+        /// </list>
+        /// </remarks>
+        public static async Task<SolverInfo> GetSolverInfo(Parameters? @params = null)
+        {
+            using var solver = new Solver();
+            return await solver.GetSolverInfoInstanceAsync(@params);
+        }
+
+        /// <summary>
+        /// Synchronously queries the solver for its version and edition.
+        /// </summary>
+        /// <param name="params">Optional solver parameters.</param>
+        /// <returns>The solver's version and edition information.</returns>
+        /// <remarks>
+        /// The blocking counterpart of <see cref="Solver.GetSolverInfo">Solver.GetSolverInfo</see>. Returns the solver's
+        /// <see cref="SolverInfo">SolverInfo</see> without solving a model. Because it blocks the calling
+        /// thread, prefer the asynchronous <see cref="Solver.GetSolverInfo">Solver.GetSolverInfo</see> in applications that
+        /// must stay responsive.
+        ///
+        /// <code>
+        /// using OptalCP;
+        ///
+        /// SolverInfo info = Solver.GetSolverInfoSync();
+        /// Console.WriteLine($"Solver {info.SolverVersion} ({info.Edition})");
+        /// </code>
+        ///
+        /// See also:
+        /// <list type="bullet">
+        /// <item><description><see cref="Solver.GetSolverInfo">Solver.GetSolverInfo</see> — for the asynchronous form.</description></item>
+        /// </list>
+        /// </remarks>
+        public static SolverInfo GetSolverInfoSync(Parameters? @params = null)
+        {
+            using var solver = new Solver();
+            return solver.GetSolverInfoInstanceSync(@params);
+        }
+
+        // Queries the solver for its version and edition via a handshake-only
+        // interaction: spawn, send the handshake, read the reply, close stdin so
+        // the solver exits cleanly. No model or command is sent.
+        private async Task<SolverInfo> GetSolverInfoInstanceAsync(Parameters? parameters)
+        {
+            if (_solving)
+                throw new InvalidOperationException("Solver is already running. Create a new Solver instance for concurrent operations.");
+            _solving = true;
+            _currentParameters = parameters;
+            _stopRequested = false;
+            _closing = false;
+            try
+            {
+                await StartProcessAsync();
+                await HandshakeAsync(colors: false);
+                return _solverInfo ?? throw new InvalidOperationException("Solver did not provide handshake info");
+            }
+            finally
+            {
+                _solving = false;
+                StopProcess();  // closes stdin -> solver exits cleanly
+            }
+        }
+
+        private SolverInfo GetSolverInfoInstanceSync(Parameters? parameters)
+        {
+            if (_solving)
+                throw new InvalidOperationException("Solver is already running. Create a new Solver instance for concurrent operations.");
+            _solving = true;
+            _currentParameters = parameters;
+            Process? syncProcess = null;
+            try
+            {
+                syncProcess = StartSolverProcess(parameters);
+
+                HandshakeSync(syncProcess, parameters, colors: false);
+
+                // Close stdin so the solver exits cleanly (EOF in the command slot).
+                syncProcess.StandardInput.Close();
+                var timeoutMs = (int)((parameters?.processExitTimeout ?? 3.0) * 1000);
+                if (!syncProcess.WaitForExit(timeoutMs))
+                {
+                    try { Compat.KillTree(syncProcess); } catch { }
+                    syncProcess.WaitForExit(1000);
+                }
+                return _solverInfo ?? throw new InvalidOperationException("Solver did not provide handshake info");
+            }
+            finally
+            {
+                _solving = false;
+                if (syncProcess != null)
+                {
+                    try { if (!syncProcess.HasExited) Compat.KillTree(syncProcess); } catch { }
+                    syncProcess.Dispose();
+                }
             }
         }
 
@@ -1215,7 +1337,7 @@ namespace OptalCP
         {
             // 1. Check parameters.solver
             var paramSolver = parameters?.solver;
-            if (!string.IsNullOrEmpty(paramSolver))
+            if (paramSolver is { Length: > 0 })
             {
                 if (File.Exists(paramSolver))
                     return paramSolver;
@@ -1225,7 +1347,7 @@ namespace OptalCP
 
             // 2. Check OPTALCP_SOLVER environment variable
             var envPath = Environment.GetEnvironmentVariable("OPTALCP_SOLVER");
-            if (!string.IsNullOrEmpty(envPath))
+            if (envPath is { Length: > 0 })
             {
                 if (File.Exists(envPath))
                     return envPath;
@@ -1249,7 +1371,7 @@ namespace OptalCP
             {
                 var separator = Path.PathSeparator;
                 var paths = pathEnv.Split(separator);
-                var executableNames = OperatingSystem.IsWindows()
+                var executableNames = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
                     ? new[] { "optalcp.exe", "optalcp" }
                     : new[] { "optalcp" };
 
@@ -1299,9 +1421,13 @@ namespace OptalCP
             }
         }
 
-        private Task StartProcessAsync()
+        // Spawns the solver process honoring solverArgs and the solver path (the
+        // solver parameter / OPTALCP_SOLVER).
+        // Used by the blocking (sync) paths, which manage a local process lifetime
+        // rather than the _process/_stdin/_stdout member fields used by the async path.
+        private static Process StartSolverProcess(Parameters? parameters)
         {
-            var resolvedPath = FindSolver(_currentParameters);
+            var resolvedPath = FindSolver(parameters);
             var psi = new ProcessStartInfo
             {
                 FileName = resolvedPath,
@@ -1309,25 +1435,37 @@ namespace OptalCP
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                // The solver writes UTF-8. The default is the console encoding,
+                // which on Windows is usually an OEM code page.
+                StandardOutputEncoding = new UTF8Encoding(false),
+                StandardErrorEncoding = new UTF8Encoding(false),
                 CreateNoWindow = true
             };
-
-            // Add solverArgs if specified
-            if (_currentParameters?.solverArgs != null)
-            {
-                foreach (var arg in _currentParameters.solverArgs)
-                    psi.ArgumentList.Add(arg);
-            }
-
-            _process = Process.Start(psi) ??
+            // stdin keeps the console encoding (netstandard2.0 has no
+            // StandardInputEncoding). That is safe because JsonSerializer escapes
+            // every non-ASCII character, so the messages we send are plain ASCII.
+            // A UTF-8 console on .NET Framework adds a BOM at Process.Start,
+            // before we could wrap the stream, and the solver skips it.
+            if (parameters?.solverArgs != null)
+                foreach (var arg in parameters.solverArgs)
+                    Compat.AddArgument(psi, arg);
+            // --server selects the stdin/stdout JSON protocol (a position-
+            // independent flag the solver requires to act as a server).
+            Compat.AddArgument(psi, "--server");
+            return Process.Start(psi) ??
                 throw new InvalidOperationException($"Failed to start solver process: {resolvedPath}");
+        }
+
+        private Task StartProcessAsync()
+        {
+            _process = StartSolverProcess(_currentParameters);
 
             _stdin = _process.StandardInput;
             _stdout = _process.StandardOutput;
             _stderr = _process.StandardError;
 
             // Start reading stderr asynchronously
-            _ = ReadStderrAsync();
+            _stderrTask = ReadStderrAsync();
 
             return Task.CompletedTask;
         }
@@ -1353,7 +1491,8 @@ namespace OptalCP
                     Console.Error.Write(line);
                     Console.Error.Write('\n');
                     Console.Error.Flush();
-                    _stderrOutput.Add(line);
+                    lock (_stderrOutput)
+                        _stderrOutput.Add(line);
                 }
             }
             catch
@@ -1382,7 +1521,7 @@ namespace OptalCP
                         if (!exited)
                         {
                             // Force kill if it didn't exit gracefully
-                            try { process.Kill(entireProcessTree: true); } catch { }
+                            try { Compat.KillTree(process); } catch { }
                             process.WaitForExit(1000);  // Short wait after kill
                         }
                     }
@@ -1400,6 +1539,7 @@ namespace OptalCP
                     try { _stderr?.Close(); } catch { }
                     _stdout = null;
                     _stderr = null;
+                    _stderrTask = null;
 
                     // Dispose the process
                     try { process.Dispose(); } catch { }
@@ -1458,6 +1598,111 @@ namespace OptalCP
                 System.Diagnostics.Debug.WriteLine($"Solver read error: {ex.Message}");
                 return null;
             }
+        }
+
+        private string GetStderrText()
+        {
+            lock (_stderrOutput)
+                return string.Join("\n", _stderrOutput);
+        }
+
+        private static Dictionary<string, object?> BuildHandshakeMessage(bool colors)
+        {
+            return new Dictionary<string, object?>
+            {
+                ["msg"] = "handshake",
+                ["version"] = ApiVersion,
+                ["colors"] = colors
+            };
+        }
+
+        // Sends the handshake on the async path and validates the reply
+        // (captures _solverInfo).
+        private async Task HandshakeAsync(bool colors)
+        {
+            Dictionary<string, object?>? response;
+            try
+            {
+                await SendMessageAsync(BuildHandshakeMessage(colors));
+                response = await ReadMessageWithTimeoutAsync(HandshakeTimeout);
+            }
+            catch (IOException)
+            {
+                // The solver exited before reading the handshake (broken pipe):
+                response = null;
+            }
+            if (response == null)
+            {
+                // The solver is exiting. Give the stderr reader a moment to
+                // collect the reason the solver gave:
+                if (_stderrTask != null)
+                    await Task.WhenAny(_stderrTask, Task.Delay(TimeSpan.FromSeconds(1)));
+                throw HandshakeClosedError(GetStderrText());
+            }
+            HandleHandshakeResponse(response);
+        }
+
+        // Sends the handshake on the sync path and validates the reply
+        // (captures _solverInfo).
+        private void HandshakeSync(Process process, Parameters? parameters, bool colors)
+        {
+            string? response;
+            try
+            {
+                process.StandardInput.WriteLine(JsonSerializer.Serialize(BuildHandshakeMessage(colors)));
+                process.StandardInput.Flush();
+                response = process.StandardOutput.ReadLine();
+            }
+            catch (IOException)
+            {
+                // The solver exited before reading the handshake (broken pipe):
+                response = null;
+            }
+            if (response is not { Length: > 0 })
+                throw HandshakeClosedError(process, parameters);
+            HandleHandshakeResponse(JsonSerializer.Deserialize<Dictionary<string, object?>>(response));
+        }
+
+        // Builds the error for a sync-path solver that closed stdout before the
+        // handshake reply. The reason is on stderr, e.g. a rejected solverArgs entry.
+        private static InvalidOperationException HandshakeClosedError(Process process, Parameters? parameters)
+        {
+            var timeoutMs = (int)((parameters?.processExitTimeout ?? 3.0) * 1000);
+            var stderrText = "";
+            if (process.WaitForExit(timeoutMs))
+            {
+                stderrText = process.StandardError.ReadToEnd();
+                Console.Error.Write(stderrText);
+                Console.Error.Flush();
+            }
+            return HandshakeClosedError(stderrText.Trim());
+        }
+
+        private static InvalidOperationException HandshakeClosedError(string stderrText)
+        {
+            return new InvalidOperationException(stderrText.Length > 0
+                ? $"Solver closed unexpectedly during handshake:\n{stderrText}"
+                : "Solver closed unexpectedly during handshake");
+        }
+
+        // Validates the handshake reply and captures the solver's version and
+        // edition (carried on every connection) into _solverInfo. Shared by the
+        // async, sync, and info-query paths.
+        private void HandleHandshakeResponse(Dictionary<string, object?>? handshakeResponse)
+        {
+            if (handshakeResponse == null)
+                throw new InvalidOperationException("Solver closed unexpectedly during handshake");
+            var handshakeMsgType = GetString(handshakeResponse, "msg");
+            if (handshakeMsgType == "error")
+                throw new InvalidOperationException($"Solver error: {GetString(handshakeResponse, "data")}");
+            if (handshakeMsgType != "handshake")
+                throw new InvalidOperationException($"Unexpected handshake response: {handshakeResponse}");
+            _solverInfo = new SolverInfo(
+                ApiVersion,
+                GetString(handshakeResponse, "version") ?? "",
+                GetString(handshakeResponse, "build") ?? "",
+                GetString(handshakeResponse, "edition") ?? "",
+                GetBool(handshakeResponse, "valuesMasked") ?? false);
         }
 
         // Helper methods for parsing JSON
@@ -1556,7 +1801,7 @@ namespace OptalCP
             _stopRequested = false;
             _closing = false;
             _modelSent = false;
-            _pendingSolutions.Clear();
+            _pendingMessages.Clear();
             _syncTextResult = null;
             _stderrOutput.Clear();
             _errors.Clear();
@@ -1576,15 +1821,23 @@ namespace OptalCP
                 {
                     // First Ctrl-C: suppress and request graceful stop
                     e.Cancel = true;
-                    if (syncProcess != null && !syncProcess.HasExited)
+                    var stopMsg = JsonSerializer.Serialize(new Dictionary<string, object?>
+                    {
+                        ["msg"] = "stop",
+                        ["reason"] = "Interrupted by user"
+                    });
+                    if (!_modelSent)
+                    {
+                        // The solve command was not written yet; writing "stop"
+                        // now would land in the command slot and the solver
+                        // would report a protocol error. Queue it instead; it
+                        // is flushed right after the command is sent.
+                        _pendingMessages.Add(stopMsg);
+                    }
+                    else if (syncProcess != null && !syncProcess.HasExited)
                     {
                         try
                         {
-                            var stopMsg = JsonSerializer.Serialize(new Dictionary<string, object?>
-                            {
-                                ["msg"] = "stop",
-                                ["reason"] = "Interrupted by user"
-                            });
                             syncProcess.StandardInput.WriteLine(stopMsg);
                             syncProcess.StandardInput.Flush();
                         }
@@ -1605,58 +1858,9 @@ namespace OptalCP
 
             try
             {
-                // Start process
-                var resolvedPath = FindSolver(parameters);
-                var psi = new ProcessStartInfo
-                {
-                    FileName = resolvedPath,
-                    UseShellExecute = false,
-                    RedirectStandardInput = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
+                syncProcess = StartSolverProcess(parameters);
 
-                // Add solverArgs if specified
-                if (parameters?.solverArgs != null)
-                {
-                    foreach (var arg in parameters.solverArgs)
-                        psi.ArgumentList.Add(arg);
-                }
-
-                syncProcess = Process.Start(psi) ??
-                    throw new InvalidOperationException($"Failed to start solver process: {resolvedPath}");
-
-                // Send handshake (blocking)
-                var handshake = new Dictionary<string, object?>
-                {
-                    ["msg"] = "handshake",
-                    ["version"] = Version,
-                    ["colors"] = CanUseColors()
-                };
-                syncProcess.StandardInput.WriteLine(JsonSerializer.Serialize(handshake));
-                syncProcess.StandardInput.Flush();
-
-                // Read handshake response (blocking)
-                var handshakeResponse = syncProcess.StandardOutput.ReadLine();
-                if (string.IsNullOrEmpty(handshakeResponse))
-                {
-                    throw new InvalidOperationException("Solver closed unexpectedly during handshake");
-                }
-                var handshakeData = JsonSerializer.Deserialize<Dictionary<string, object?>>(handshakeResponse);
-                if (handshakeData != null)
-                {
-                    var handshakeMsgType = GetString(handshakeData, "msg");
-                    if (handshakeMsgType == "error")
-                    {
-                        var errorData = GetString(handshakeData, "data");
-                        throw new InvalidOperationException($"Solver error: {errorData}");
-                    }
-                    if (handshakeMsgType != "handshake")
-                    {
-                        throw new InvalidOperationException($"Unexpected handshake response: {handshakeResponse}");
-                    }
-                }
+                HandshakeSync(syncProcess, parameters, CanUseColors());
 
                 // Build and send command
                 // Sync always batches results (no callbacks available, matching Python _sync_run)
@@ -1665,12 +1869,12 @@ namespace OptalCP
                 syncProcess.StandardInput.WriteLine(JsonSerializer.Serialize(solveMsg));
                 syncProcess.StandardInput.Flush();
                 _modelSent = true;
-                foreach (var pendingJson in _pendingSolutions)
+                foreach (var pendingJson in _pendingMessages)
                 {
                     syncProcess.StandardInput.WriteLine(pendingJson);
                     syncProcess.StandardInput.Flush();
                 }
-                _pendingSolutions.Clear();
+                _pendingMessages.Clear();
 
                 // Read responses until done (blocking)
                 while (true)
@@ -1738,7 +1942,7 @@ namespace OptalCP
 
                         case "log":
                             var logData = GetString(response, "data");
-                            if (!string.IsNullOrEmpty(logData))
+                            if (logData is { Length: > 0 })
                             {
                                 OutputWriter?.Write(logData);
                                 OutputWriter?.Flush();
@@ -1748,7 +1952,7 @@ namespace OptalCP
 
                         case "warning":
                             var warnData = GetString(response, "data");
-                            if (!string.IsNullOrEmpty(warnData))
+                            if (warnData is { Length: > 0 })
                             {
                                 var warnPrefix = GetString(response, "prefix") ?? "";
                                 OutputWriter?.Write($"{warnPrefix}{warnData}");
@@ -1778,7 +1982,7 @@ namespace OptalCP
                 var exitTimeoutMs = (int)((parameters?.processExitTimeout ?? 3.0) * 1000);
                 if (!syncProcess.WaitForExit(exitTimeoutMs))
                 {
-                    try { syncProcess.Kill(entireProcessTree: true); } catch { }
+                    try { Compat.KillTree(syncProcess); } catch { }
                     syncProcess.WaitForExit(1000);  // Short wait after kill
                 }
 

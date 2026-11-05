@@ -1,6 +1,6 @@
 // ===========================================================================
 // OptalCP C# API - Solution
-// Version: 2026.4.0
+// Version: 2026.11.0
 // ===========================================================================
 
 using System;
@@ -89,21 +89,21 @@ namespace OptalCP
         /// </remarks>
         public bool IsPresent(IntVar variable)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             return _values.ContainsKey(variable.GetId());
         }
 
         /// <inheritdoc cref="IsPresent(IntVar)"/>
         public bool IsPresent(BoolVar variable)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             return _values.ContainsKey(variable.GetId());
         }
 
         /// <inheritdoc cref="IsPresent(IntVar)"/>
         public bool IsPresent(IntervalVar interval)
         {
-            ArgumentNullException.ThrowIfNull(interval);
+            Compat.ThrowIfNull(interval);
             return _values.ContainsKey(interval.GetId());
         }
 
@@ -118,21 +118,21 @@ namespace OptalCP
         /// </remarks>
         public bool IsAbsent(IntVar variable)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             return !_values.ContainsKey(variable.GetId());
         }
 
         /// <inheritdoc cref="IsAbsent(IntVar)"/>
         public bool IsAbsent(BoolVar variable)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             return !_values.ContainsKey(variable.GetId());
         }
 
         /// <inheritdoc cref="IsAbsent(IntVar)"/>
         public bool IsAbsent(IntervalVar interval)
         {
-            ArgumentNullException.ThrowIfNull(interval);
+            Compat.ThrowIfNull(interval);
             return !_values.ContainsKey(interval.GetId());
         }
 
@@ -152,7 +152,7 @@ namespace OptalCP
         /// </remarks>
         public int? GetValue(IntVar variable)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             if (_values.TryGetValue(variable.GetId(), out var val) && val != null)
                 return Convert.ToInt32(val);
             return null;
@@ -174,7 +174,7 @@ namespace OptalCP
         /// </remarks>
         public bool? GetValue(BoolVar variable)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             if (_values.TryGetValue(variable.GetId(), out var val) && val != null)
                 return Convert.ToInt32(val) != 0;
             return null;
@@ -197,7 +197,7 @@ namespace OptalCP
         /// </remarks>
         public (int Start, int End)? GetValue(IntervalVar interval)
         {
-            ArgumentNullException.ThrowIfNull(interval);
+            Compat.ThrowIfNull(interval);
             if (_values.TryGetValue(interval.GetId(), out var val) && val is ValueTuple<int, int> tuple)
                 return tuple;
             return null;
@@ -216,7 +216,7 @@ namespace OptalCP
         /// </remarks>
         public int? GetStart(IntervalVar variable)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             var value = GetValue(variable);
             return value?.Start;
         }
@@ -234,7 +234,7 @@ namespace OptalCP
         /// </remarks>
         public int? GetEnd(IntervalVar variable)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             var value = GetValue(variable);
             return value?.End;
         }
@@ -252,7 +252,7 @@ namespace OptalCP
         /// </remarks>
         public int? GetLength(IntervalVar variable)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             var value = GetValue(variable);
             if (value.HasValue)
                 return value.Value.End - value.Value.Start;
@@ -274,7 +274,7 @@ namespace OptalCP
         /// </remarks>
         public void SetValue(IntVar variable, int value)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             _values[variable.GetId()] = value;
         }
 
@@ -293,7 +293,7 @@ namespace OptalCP
         /// </remarks>
         public void SetValue(BoolVar variable, bool value)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             _values[variable.GetId()] = value ? 1 : 0;
         }
 
@@ -313,7 +313,7 @@ namespace OptalCP
         /// </remarks>
         public void SetValue(IntervalVar variable, int start, int end)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             _values[variable.GetId()] = (start, end);
         }
 
@@ -327,21 +327,21 @@ namespace OptalCP
         /// </remarks>
         public void SetAbsent(IntVar variable)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             _values.Remove(variable.GetId());
         }
 
         /// <inheritdoc cref="SetAbsent(IntVar)"/>
         public void SetAbsent(BoolVar variable)
         {
-            ArgumentNullException.ThrowIfNull(variable);
+            Compat.ThrowIfNull(variable);
             _values.Remove(variable.GetId());
         }
 
         /// <inheritdoc cref="SetAbsent(IntVar)"/>
         public void SetAbsent(IntervalVar interval)
         {
-            ArgumentNullException.ThrowIfNull(interval);
+            Compat.ThrowIfNull(interval);
             _values.Remove(interval.GetId());
         }
 

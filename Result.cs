@@ -1,6 +1,6 @@
 // ===========================================================================
 // OptalCP C# API - Result Types
-// Version: 2026.4.0
+// Version: 2026.11.0
 // ===========================================================================
 
 using System;
@@ -107,6 +107,89 @@ namespace OptalCP
         {
             this.SolveTime = solveTime;
             this.Value = value;
+        }
+    }
+
+    /// <summary>
+    /// Version and edition information reported by the solver.
+    /// </summary>
+    /// <remarks>
+    /// Describes the solver binary the API is talking to: its version, its edition,
+    /// and whether it masks solution values.
+    ///
+    /// The edition is fixed when the solver binary is built. In the preview
+    /// edition, all solution values are masked (reported as absent), so
+    /// <see cref="SolverInfo.ValuesMasked">SolverInfo.ValuesMasked</see> is the reliable way to tell whether the values
+    /// in a <see cref="Solution">Solution</see> are real.
+    ///
+    /// It is attached to every <see cref="SolveResult">SolveResult</see> as <see cref="SolveResult.SolverInfo">SolveResult.SolverInfo</see>,
+    /// and can also be queried without solving.
+    ///
+    /// See also:
+    /// <list type="bullet">
+    /// <item><description><see cref="Solver.GetSolverInfo">Solver.GetSolverInfo</see> — to query it without solving.</description></item>
+    /// <item><description><see cref="SolveResult.SolverInfo">SolveResult.SolverInfo</see> — for the value attached to a solve result.</description></item>
+    /// </list>
+    /// </remarks>
+    public class SolverInfo
+    {
+        /// <summary>
+        /// Version of the API package (the language binding).
+        /// </summary>
+        /// <returns>The API version string.</returns>
+        /// <remarks>
+        /// This is the version of the language API, equal to the <see cref="Solver.ApiVersion">Solver.ApiVersion</see>
+        /// constant. It may differ from <see cref="SolverInfo.SolverVersion">SolverInfo.SolverVersion</see>, which is the
+        /// version of the solver binary.
+        /// </remarks>
+        public string ApiVersion { get; }
+        /// <summary>
+        /// Version of the solver binary.
+        /// </summary>
+        /// <returns>The solver version string.</returns>
+        /// <remarks>
+        /// The API and the solver normally have matching versions, but this field reports
+        /// the solver's own version directly.
+        /// </remarks>
+        public string SolverVersion { get; }
+        /// <summary>
+        /// Build identifier of the solver binary.
+        /// </summary>
+        /// <returns>The build identifier, or an empty string for an official release.</returns>
+        /// <remarks>
+        /// Identifies the exact build of the solver, including the source commit hash. It
+        /// is empty for an official release. Useful to include in bug reports so the precise
+        /// binary can be identified.
+        /// </remarks>
+        public string Build { get; }
+        /// <summary>
+        /// Edition of the solver binary.
+        /// </summary>
+        /// <returns>The edition name, one of <c>"preview"</c>, <c>"academic"</c>, or <c>"full"</c>.</returns>
+        /// <remarks>
+        /// The edition is fixed when the solver is built. To decide whether solution
+        /// values are available, prefer <see cref="SolverInfo.ValuesMasked">SolverInfo.ValuesMasked</see> over comparing
+        /// this string.
+        /// </remarks>
+        public string Edition { get; }
+        /// <summary>
+        /// Whether the solver masks solution values.
+        /// </summary>
+        /// <returns>True if solution values are masked (preview edition), False otherwise.</returns>
+        /// <remarks>
+        /// When true (the preview edition), every value in a <see cref="Solution">Solution</see> is reported
+        /// as absent regardless of the actual result. Use this flag to distinguish a
+        /// masked value from a variable that is genuinely absent.
+        /// </remarks>
+        public bool ValuesMasked { get; }
+
+        internal SolverInfo(string apiVersion, string solverVersion, string build, string edition, bool valuesMasked)
+        {
+            this.ApiVersion = apiVersion;
+            this.SolverVersion = solverVersion;
+            this.Build = build;
+            this.Edition = edition;
+            this.ValuesMasked = valuesMasked;
         }
     }
 
@@ -276,14 +359,12 @@ namespace OptalCP
         /// <returns>Constraint count.</returns>
         public int NbConstraints { get; internal set; }
 
-        /// <summary>
-        /// Solver name and version string.
-        /// </summary>
-        /// <returns>The solver identification string.</returns>
-        /// <remarks>
-        /// Contains the solver name followed by its version number.
-        /// </remarks>
+        // Deprecated. Use SolverInfo instead. Intentionally undocumented.
+#pragma warning disable CS1591  // Deprecated, hidden member: no XML doc by design.
+        [System.Obsolete("Use SolverInfo instead.")]
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         public string Solver { get; internal set; } = "";
+#pragma warning restore CS1591
 
         /// <summary>
         /// Number of worker threads actually used during solving.
@@ -392,6 +473,21 @@ namespace OptalCP
         /// stop with an error.
         /// </remarks>
         public bool? SolutionValid { get; internal set; }
+
+        /// <summary>
+        /// Version and edition of the solver that produced this result.
+        /// </summary>
+        /// <returns>The solver information, or None if no solve was run (e.g. benchmark export-only mode).</returns>
+        /// <remarks>
+        /// Useful for logging the solver version, or for checking
+        /// <see cref="SolverInfo.ValuesMasked">SolverInfo.ValuesMasked</see> before reading solution values.
+        ///
+        /// See also:
+        /// <list type="bullet">
+        /// <item><description><see cref="Solver.GetSolverInfo">Solver.GetSolverInfo</see> — to obtain the same information without solving.</description></item>
+        /// </list>
+        /// </remarks>
+        public SolverInfo? SolverInfo { get; internal set; }
 
         /// <inheritdoc/>
         public override string ToString()

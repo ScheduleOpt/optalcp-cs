@@ -1,6 +1,6 @@
 // ===========================================================================
 // OptalCP C# API - Model Class
-// Version: 2026.4.0
+// Version: 2026.11.0
 // ===========================================================================
 
 using System;
@@ -437,8 +437,8 @@ namespace OptalCP
         /// Creates a new interval variable and adds it to the model.
         /// </summary>
         /// <param name="start">Fixed start time or range [min, max]. Pass an int for a fixed value, a tuple (min, max) for a range, or null for the default range [0, Model.IntervalMax].</param>
-        /// <param name="end">Fixed end time or range [min, max]. Pass an int for a fixed value, a tuple (min, max) for a range, or null for the default range [0, Model.IntervalMax].</param>
-        /// <param name="length">Fixed length or range [min, max]. Pass an int for a fixed value, a tuple (min, max) for a range, or null for the default range [0, Model.IntervalMax].</param>
+        /// <param name="end">Fixed end time or range [min, max]. Pass an int for a fixed value, a tuple (min, max) for a range, or null for the default range [Model.IntervalMin, Model.IntervalMax].</param>
+        /// <param name="length">Fixed length or range [min, max]. Pass an int for a fixed value, a tuple (min, max) for a range, or null for the default range [0, Model.LengthMax].</param>
         /// <param name="optional">If true, the interval can be absent in a solution. The default is false.</param>
         /// <param name="name">Optional name for debugging purposes.</param>
         /// <returns>The created interval variable.</returns>
@@ -456,7 +456,10 @@ namespace OptalCP
         /// - An <see langword="int"/> for a fixed value
         /// - A tuple <c>(int min, int max)</c> for a range (use <see langword="null"/> for either bound to keep the default)
         ///
-        /// The default range for start, end and length is <c>0</c> to <see cref="Model.IntervalMax">Model.IntervalMax</see>.
+        /// The default ranges are <c>0</c> to <see cref="Model.IntervalMax">Model.IntervalMax</see> for start, <see cref="Model.IntervalMin">Model.IntervalMin</see>
+        /// to <see cref="Model.IntervalMax">Model.IntervalMax</see> for end, and <c>0</c> to <see cref="Model.LengthMax">Model.LengthMax</see> for length. So only
+        /// the default start keeps the interval at non-negative times. When you give a
+        /// negative start, the end can follow it without a range of its own.
         ///
         /// <para>Example:</para>
         /// <example>
@@ -821,7 +824,7 @@ namespace OptalCP
         ///
         /// * Function <see cref="Model.Eval">Model.Eval</see> evaluates the function at the given point (given as <see cref="IntExpr">IntExpr</see>).
         /// * Function <see cref="Model.Integral">Model.Integral</see> computes a sum (integral) of the function over an <see cref="IntervalVar">IntervalVar</see>.
-        /// * Constraints <see cref="Model.ForbidStart">Model.ForbidStart</see> and <see cref="Model.ForbidEnd">Model.ForbidEnd</see> forbid the start/end of an <see cref="IntervalVar">IntervalVar</see> to be in a zero-value interval of the function.
+        /// * Constraint <see cref="Model.ForbidStart">Model.ForbidStart</see> forbids the start of an <see cref="IntervalVar">IntervalVar</see> to be in a zero-value interval of the function. Constraint <see cref="Model.ForbidEnd">Model.ForbidEnd</see> does the same for the last time point of the interval (end - 1).
         /// * Constraint <see cref="Model.ForbidExtent">Model.ForbidExtent</see> forbids the extent of an <see cref="IntervalVar">IntervalVar</see> to be in a zero-value interval of the function.
         /// </remarks>
         public IntStepFunction StepFunction(IEnumerable<(int, int)> values)
@@ -840,6 +843,10 @@ namespace OptalCP
         /// <remarks>
         /// Creates an <see cref="Objective">Objective</see> to minimize the given expression.
         /// A model can have at most one objective. New objective replaces the old one.
+        ///
+        /// The expression can be *absent* (see optional <see cref="IntExpr">IntExpr</see>). An absent
+        /// value is worse than any present value. So the solver prefers a solution in
+        /// which the expression is present.
         ///
         /// Equivalent of function <see cref="IntExpr.Minimize">IntExpr.Minimize</see>.
         ///
@@ -879,6 +886,10 @@ namespace OptalCP
         /// <remarks>
         /// Creates an <see cref="Objective">Objective</see> to maximize the given expression.
         /// A model can have at most one objective. New objective replaces the old one.
+        ///
+        /// The expression can be *absent* (see optional <see cref="IntExpr">IntExpr</see>). An absent
+        /// value is worse than any present value. So the solver prefers a solution in
+        /// which the expression is present.
         ///
         /// Equivalent of function <see cref="IntExpr.Maximize">IntExpr.Maximize</see>.
         ///
@@ -975,7 +986,7 @@ namespace OptalCP
         public IntExpr Sum(IEnumerable<IntExpr> args)
         {
             var wrapped = args.Select(a => IntExpr.Wrap(a)).ToList();
-            if (wrapped.Count == 0) return new IntExpr(this, "constInt", new object[] { 0 });
+            if (wrapped.Count == 0) return new IntExpr(this, "intConst", new object[] { 0 });
             return new IntExpr(this, "intSum", new object[] { wrapped });
         }
 
@@ -983,7 +994,7 @@ namespace OptalCP
         public IntExpr Sum(IEnumerable<object> args)
         {
             var wrapped = IntExpr.WrapMixedList(args);
-            if (wrapped.Count == 0) return new IntExpr(this, "constInt", new object[] { 0 });
+            if (wrapped.Count == 0) return new IntExpr(this, "intConst", new object[] { 0 });
             return new IntExpr(this, "intSum", new object[] { wrapped });
         }
 
@@ -1599,9 +1610,7 @@ namespace OptalCP
         ///
         /// * OptalCP supports optional integer expressions, while CP Optimizer does not.
         ///   If the model contains optional integer expressions, the result will not be
-        ///   valid for CP Optimizer or may be badly interpreted. For example, to get
-        ///   a valid CP Optimizer file, don't use <c>interval.start()</c>, use
-        ///   <c>interval.start_or(default)</c> instead.
+        ///   valid for CP Optimizer or may be badly interpreted.
         /// * For the same reason, prefer precedence constraints such as
         ///   <c>end_before_start()</c> over <c>model.enforce(x.end() &lt;= y.start())</c>.
         /// * Negative heights in cumulative expressions (e.g., in <c>step_at_start()</c>)
@@ -1675,9 +1684,6 @@ namespace OptalCP
             return solver.SyncToJS(this, parameters, warmStart);
         }
 
-        /// <summary>
-        /// Creates a _reusableBoolExpr expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr ReusableBoolExpr(BoolExpr value)
         {
@@ -1685,9 +1691,6 @@ namespace OptalCP
             return new BoolExpr(this, "reusableBoolExpr", outParams);
         }
 
-        /// <summary>
-        /// Creates a _reusableBoolExpr expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr ReusableBoolExpr(bool value)
         {
@@ -1695,9 +1698,6 @@ namespace OptalCP
             return new BoolExpr(this, "reusableBoolExpr", outParams);
         }
 
-        /// <summary>
-        /// Creates a _reusableIntExpr expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal IntExpr ReusableIntExpr(IntExpr value)
         {
@@ -1705,9 +1705,6 @@ namespace OptalCP
             return new IntExpr(this, "reusableIntExpr", outParams);
         }
 
-        /// <summary>
-        /// Creates a _reusableIntExpr expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal IntExpr ReusableIntExpr(int value)
         {
@@ -1831,9 +1828,6 @@ namespace OptalCP
             return new BoolExpr(this, "boolImplies", outParams);
         }
 
-        /// <summary>
-        /// Creates a _eq expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Eq(BoolExpr lhs, BoolExpr rhs)
         {
@@ -1841,9 +1835,6 @@ namespace OptalCP
             return new BoolExpr(this, "boolEq", outParams);
         }
 
-        /// <summary>
-        /// Creates a _eq expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Eq(bool lhs, BoolExpr rhs)
         {
@@ -1851,9 +1842,6 @@ namespace OptalCP
             return new BoolExpr(this, "boolEq", outParams);
         }
 
-        /// <summary>
-        /// Creates a _eq expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Eq(BoolExpr lhs, bool rhs)
         {
@@ -1861,9 +1849,6 @@ namespace OptalCP
             return new BoolExpr(this, "boolEq", outParams);
         }
 
-        /// <summary>
-        /// Creates a _ne expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Ne(BoolExpr lhs, BoolExpr rhs)
         {
@@ -1871,9 +1856,6 @@ namespace OptalCP
             return new BoolExpr(this, "boolNe", outParams);
         }
 
-        /// <summary>
-        /// Creates a _ne expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Ne(bool lhs, BoolExpr rhs)
         {
@@ -1881,9 +1863,6 @@ namespace OptalCP
             return new BoolExpr(this, "boolNe", outParams);
         }
 
-        /// <summary>
-        /// Creates a _ne expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Ne(BoolExpr lhs, bool rhs)
         {
@@ -1891,9 +1870,6 @@ namespace OptalCP
             return new BoolExpr(this, "boolNe", outParams);
         }
 
-        /// <summary>
-        /// Creates a _nand expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Nand(BoolExpr lhs, BoolExpr rhs)
         {
@@ -1901,9 +1877,6 @@ namespace OptalCP
             return new BoolExpr(this, "boolNand", outParams);
         }
 
-        /// <summary>
-        /// Creates a _nand expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Nand(bool lhs, BoolExpr rhs)
         {
@@ -1911,9 +1884,6 @@ namespace OptalCP
             return new BoolExpr(this, "boolNand", outParams);
         }
 
-        /// <summary>
-        /// Creates a _nand expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr Nand(BoolExpr lhs, bool rhs)
         {
@@ -2010,9 +1980,6 @@ namespace OptalCP
             return new BoolExpr(this, "intInRange", outParams);
         }
 
-        /// <summary>
-        /// Creates a _notInRange expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr NotInRange(IntExpr arg, int lb, int ub)
         {
@@ -2020,9 +1987,6 @@ namespace OptalCP
             return new BoolExpr(this, "intNotInRange", outParams);
         }
 
-        /// <summary>
-        /// Creates a _notInRange expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr NotInRange(int arg, int lb, int ub)
         {
@@ -2113,6 +2077,20 @@ namespace OptalCP
         {
             var outParams = new List<object?>() { OptalCP.IntExpr.Wrap(lhs), rhs };
             return new IntExpr(this, "intMax2", outParams);
+        }
+
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        internal IntExpr LearningSum(IEnumerable<IntExpr> args)
+        {
+            var outParams = new List<object?>() { OptalCP.IntExpr.WrapList(args) };
+            return new IntExpr(this, "learningSum", outParams);
+        }
+
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        internal IntExpr LearningSum(IEnumerable<object> args)
+        {
+            var outParams = new List<object?>() { OptalCP.IntExpr.WrapMixedList(args) };
+            return new IntExpr(this, "learningSum", outParams);
         }
 
         /// <summary>
@@ -2214,9 +2192,6 @@ namespace OptalCP
             return new IntExpr(this, "intMin", outParams);
         }
 
-        /// <summary>
-        /// Creates a _linearExpr expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal IntExpr IntPresentLinearExpr(IEnumerable<int> coefficients, IEnumerable<IntExpr> expressions, int constantTerm = 0)
         {
@@ -2224,9 +2199,6 @@ namespace OptalCP
             return new IntExpr(this, "intPresentLinearExpr", outParams);
         }
 
-        /// <summary>
-        /// Creates a _linearExpr expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal IntExpr IntPresentLinearExpr(IEnumerable<int> coefficients, IEnumerable<object> expressions, int constantTerm = 0)
         {
@@ -2234,9 +2206,6 @@ namespace OptalCP
             return new IntExpr(this, "intPresentLinearExpr", outParams);
         }
 
-        /// <summary>
-        /// Creates a _linearExpr expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal IntExpr IntOptionalLinearExpr(IEnumerable<int> coefficients, IEnumerable<IntExpr> expressions, int constantTerm = 0)
         {
@@ -2244,9 +2213,6 @@ namespace OptalCP
             return new IntExpr(this, "intOptionalLinearExpr", outParams);
         }
 
-        /// <summary>
-        /// Creates a _linearExpr expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal IntExpr IntOptionalLinearExpr(IEnumerable<int> coefficients, IEnumerable<object> expressions, int constantTerm = 0)
         {
@@ -2640,9 +2606,6 @@ namespace OptalCP
             return new IntExpr(this, "lengthOf", outParams);
         }
 
-        /// <summary>
-        /// Creates a _alternativeCost expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal IntExpr AlternativeCost(IntervalVar main, IEnumerable<IntervalVar> options, IEnumerable<int> weights)
         {
@@ -2969,7 +2932,7 @@ namespace OptalCP
         ///
         /// The constraint <c>alternative(main, options)</c> is satisfied in the following two cases:
         /// 1. Interval <c>main</c> is *absent* and all <c>options[i]</c> are *absent* too.
-        /// 2. Interval <c>main</c> is *present* and exactly one of <c>options[i]</c> is *present* (the remaining options are *absent*).    Let <c>k</c> be the index of the present option.    Then <c>main.start() == options[k].start()</c> and <c>main.end() == options[k].end()</c>.
+        /// 2. Interval <c>main</c> is *present* and there is exactly one index <c>k</c> such that <c>options[k]</c> is *present* (the remaining options are *absent*).    Then <c>main.start() == options[k].start()</c> and <c>main.end() == options[k].end()</c>.
         ///
         /// <para>Example:</para>
         /// <example>
@@ -3014,9 +2977,6 @@ namespace OptalCP
             return new Constraint(this, "alternative", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarElement expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint IntervalVarElement(IEnumerable<IntervalVar> slots, IntExpr index, IntervalVar value)
         {
@@ -3024,9 +2984,6 @@ namespace OptalCP
             return new Constraint(this, "intervalVarElement", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarElement expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint IntervalVarElement(IEnumerable<IntervalVar> slots, int index, IntervalVar value)
         {
@@ -3034,9 +2991,6 @@ namespace OptalCP
             return new Constraint(this, "intervalVarElement", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarElement expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint IncreasingIntervalVarElement(IEnumerable<IntervalVar> slots, IntExpr index, IntervalVar value)
         {
@@ -3044,9 +2998,6 @@ namespace OptalCP
             return new Constraint(this, "increasingIntervalVarElement", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarElement expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint IncreasingIntervalVarElement(IEnumerable<IntervalVar> slots, int index, IntervalVar value)
         {
@@ -3054,9 +3005,6 @@ namespace OptalCP
             return new Constraint(this, "increasingIntervalVarElement", outParams);
         }
 
-        /// <summary>
-        /// Creates a _itvMapping expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint ItvMapping(IEnumerable<IntervalVar> tasks, IEnumerable<IntervalVar> slots, IEnumerable<IntExpr> indices)
         {
@@ -3064,9 +3012,6 @@ namespace OptalCP
             return new Constraint(this, "itvMapping", outParams);
         }
 
-        /// <summary>
-        /// Creates a _itvMapping expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint ItvMapping(IEnumerable<IntervalVar> tasks, IEnumerable<IntervalVar> slots, IEnumerable<object> indices)
         {
@@ -3130,9 +3075,6 @@ namespace OptalCP
             return new Constraint(this, "span", outParams);
         }
 
-        /// <summary>
-        /// Creates a _selectiveDisjunction expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint SelectiveDisjunction(IEnumerable<IntervalVar> intervals, IEnumerable<int> types, IEnumerable<IEnumerable<int>>? transitions = null)
         {
@@ -3142,9 +3084,6 @@ namespace OptalCP
             return new Constraint(this, "selectiveDisjunction", outParams);
         }
 
-        /// <summary>
-        /// Creates a _alwaysEqual expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint AlwaysEqual(StateFunction func, IntervalVar interval, int value)
         {
@@ -3159,9 +3098,13 @@ namespace OptalCP
         /// <param name="sequence">The sequence variable.</param>
         /// <returns>The resulting integer expression</returns>
         /// <remarks>
-        /// In the solution, the interval which is scheduled first has position 0, the second interval has position 1, etc. The position of an absent interval is <c>absent</c>.
+        /// In the solution, the present interval that is scheduled first in the <c>sequence</c> has position 0, the second one has position 1, etc. Absent intervals are not counted. The position of an absent interval is <c>absent</c>.
         ///
-        /// The <c>position</c> expression cannot be used with interval variables of possibly zero length (because the position of two simultaneous zero-length intervals would be undefined). Also, <c>position</c> cannot be used in case of <see cref="Model.NoOverlap">Model.NoOverlap</see> constraint with transition times.
+        /// The <c>position</c> expression has the following requirements:
+        ///
+        /// * The <c>sequence</c> must be used in a <see cref="Model.NoOverlap">Model.NoOverlap</see> constraint.
+        /// * The <c>interval</c> must appear exactly once in the <c>sequence</c>.
+        /// * The <c>interval</c> cannot have zero length, i.e., its minimum length must be at least 1. Otherwise, the position of two simultaneous zero-length intervals would be undefined.
         ///
         /// See also:
         /// <list type="bullet">
@@ -3176,9 +3119,6 @@ namespace OptalCP
             return new IntExpr(this, "position", outParams);
         }
 
-        /// <summary>
-        /// Creates a _sameSequence expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint SameSequence(SequenceVar sequence1, SequenceVar sequence2)
         {
@@ -3186,9 +3126,6 @@ namespace OptalCP
             return new Constraint(this, "sameSequence", outParams);
         }
 
-        /// <summary>
-        /// Creates a _sameSequenceGroup expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint SameSequenceGroup(IEnumerable<SequenceVar> sequences)
         {
@@ -3216,6 +3153,8 @@ namespace OptalCP
         /// * <c>0</c> after <c>interval.end()</c>
         ///
         /// If <c>interval</c> is absent, the pulse is <c>0</c> everywhere.
+        ///
+        /// If <c>interval</c> has length 0, the pulse is also <c>0</c> everywhere, whatever its <c>height</c>, so it always satisfies a maximum capacity.
         ///
         /// The <c>height</c> can be a constant value or an expression. In particular, the <c>height</c> can be given by an <see cref="IntVar">IntVar</see>. In such a case, the <c>height</c> is unknown at the time of the model creation but is determined during the search.
         ///
@@ -3347,6 +3286,8 @@ namespace OptalCP
         ///
         /// If the <c>interval</c> or the <c>height</c> is *absent*, the created cumulative function is <c>0</c> everywhere.
         ///
+        /// Note: Combining _pulses_ (<see cref="Model.Pulse">Model.Pulse</see>) and _steps_ (<see cref="Model.StepAtStart">Model.StepAtStart</see>, <see cref="Model.StepAtEnd">Model.StepAtEnd</see>, <see cref="Model.StepAt">Model.StepAt</see>) is not supported yet.
+        ///
         /// <para>Example:</para>
         /// <example>
         /// Let us consider a set of tasks. Each task either costs a certain amount of money or makes some money. Money is consumed at the start of a task and produced at the end. We have an initial <c>budget</c>, and we want to schedule the tasks so that we do not run out of money (i.e., the amount is always non-negative).
@@ -3438,6 +3379,8 @@ namespace OptalCP
         /// * <c>height</c> after <c>interval.end()</c>.
         ///
         /// If the <c>interval</c> or the <c>height</c> is *absent*, the created cumulative function is <c>0</c> everywhere.
+        ///
+        /// Note: Combining _pulses_ (<see cref="Model.Pulse">Model.Pulse</see>) and _steps_ (<see cref="Model.StepAtStart">Model.StepAtStart</see>, <see cref="Model.StepAtEnd">Model.StepAtEnd</see>, <see cref="Model.StepAt">Model.StepAt</see>) is not supported yet.
         ///
         /// <para>Example:</para>
         /// <example>
@@ -3541,9 +3484,6 @@ namespace OptalCP
             return new CumulExpr(this, "stepAt", outParams);
         }
 
-        /// <summary>
-        /// Creates a _cumulMaxProfile expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint CumulMaxProfile(CumulExpr cumul, IntStepFunction profile)
         {
@@ -3551,9 +3491,6 @@ namespace OptalCP
             return new Constraint(this, "cumulMaxProfile", outParams);
         }
 
-        /// <summary>
-        /// Creates a _cumulMinProfile expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint CumulMinProfile(CumulExpr cumul, IntStepFunction profile)
         {
@@ -3561,9 +3498,6 @@ namespace OptalCP
             return new Constraint(this, "cumulMinProfile", outParams);
         }
 
-        /// <summary>
-        /// Creates a _cumulStairs expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal CumulExpr CumulStairs(IEnumerable<CumulExpr> atoms)
         {
@@ -3571,9 +3505,6 @@ namespace OptalCP
             return new CumulExpr(this, "cumulStairs", outParams);
         }
 
-        /// <summary>
-        /// Creates a _precedenceEnergy expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint PrecedenceEnergyBefore(IntervalVar main, IEnumerable<IntervalVar> others, IEnumerable<int> heights, int capacity)
         {
@@ -3581,9 +3512,6 @@ namespace OptalCP
             return new Constraint(this, "precedenceEnergyBefore", outParams);
         }
 
-        /// <summary>
-        /// Creates a _precedenceEnergy expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint PrecedenceEnergyAfter(IntervalVar main, IEnumerable<IntervalVar> others, IEnumerable<int> heights, int capacity)
         {
@@ -3613,9 +3541,6 @@ namespace OptalCP
             return new IntExpr(this, "intStepFunctionIntegral", outParams);
         }
 
-        /// <summary>
-        /// Creates a _stepFunctionIntegralInRange expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint StepFunctionIntegralInRange(IntStepFunction func, IntervalVar interval, int lb, int ub)
         {
@@ -3654,9 +3579,6 @@ namespace OptalCP
             return new IntExpr(this, "intStepFunctionEval", outParams);
         }
 
-        /// <summary>
-        /// Creates a _stepFunctionEvalInRange expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint StepFunctionEvalInRange(IntStepFunction func, IntExpr arg, int lb, int ub)
         {
@@ -3664,9 +3586,6 @@ namespace OptalCP
             return new Constraint(this, "intStepFunctionEvalInRange", outParams);
         }
 
-        /// <summary>
-        /// Creates a _stepFunctionEvalInRange expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint StepFunctionEvalInRange(IntStepFunction func, int arg, int lb, int ub)
         {
@@ -3674,9 +3593,6 @@ namespace OptalCP
             return new Constraint(this, "intStepFunctionEvalInRange", outParams);
         }
 
-        /// <summary>
-        /// Creates a _stepFunctionEvalNotInRange expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint StepFunctionEvalNotInRange(IntStepFunction func, IntExpr arg, int lb, int ub)
         {
@@ -3684,9 +3600,6 @@ namespace OptalCP
             return new Constraint(this, "intStepFunctionEvalNotInRange", outParams);
         }
 
-        /// <summary>
-        /// Creates a _stepFunctionEvalNotInRange expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint StepFunctionEvalNotInRange(IntStepFunction func, int arg, int lb, int ub)
         {
@@ -3783,7 +3696,7 @@ namespace OptalCP
         }
 
         /// <summary>
-        /// Constrains the end of the interval variable to be outside of the zero-height segments of the step function.
+        /// Constrains the last time point of the interval variable (end - 1) to be outside of the zero-height segments of the step function.
         /// </summary>
         /// <param name="interval">The interval variable.</param>
         /// <param name="func">The step function.</param>
@@ -3792,10 +3705,17 @@ namespace OptalCP
         /// This function is equivalent to:
         ///
         /// <code>
-        /// model.Enforce(model.Eval(func, interval.End()) != 0);
+        /// model.Enforce(model.Eval(func, interval.End() - 1) != 0);
         /// </code>
         ///
-        /// I.e., the function value at the end of the interval variable cannot be zero.
+        /// I.e., the function value at <c>end - 1</c> cannot be zero. The end of an interval
+        /// variable is exclusive, so <c>end - 1</c> is the last time point the interval covers.
+        /// A zero-length interval covers no time point, but the constraint still checks
+        /// <c>end - 1</c> for it.
+        ///
+        /// The constraint cannot be used inside a boolean expression. To combine the
+        /// condition with other conditions (e.g. in a disjunction), use the <c>eval</c> expression
+        /// above instead.
         ///
         /// @example A delivery task that must complete during business hours (not during lunch break):
         ///
@@ -3805,7 +3725,7 @@ namespace OptalCP
         /// // A 1-hour delivery task
         /// var delivery = model.IntervalVar(length: 1, name: "delivery");
         ///
-        /// // Allowed end times: 1 = allowed, 0 = forbidden
+        /// // The last hour of the delivery: 1 = allowed, 0 = forbidden
         /// var allowedEnds = model.StepFunction(new[] {
         ///     (0, 0),   // Before 9h: forbidden
         ///     (9, 1),   // 9h: business opens, allowed
@@ -3814,7 +3734,7 @@ namespace OptalCP
         ///     (17, 0),  // 17h: business closes, forbidden
         /// });
         ///
-        /// // Delivery cannot end when allowedEnds is 0
+        /// // Delivery cannot end at t when allowedEnds is 0 at t - 1
         /// model.ForbidEnd(delivery, allowedEnds);
         /// model.Minimize(delivery.End());
         ///
@@ -3834,9 +3754,6 @@ namespace OptalCP
             return new Constraint(this, "forbidEnd", outParams);
         }
 
-        /// <summary>
-        /// Creates a _disjunctiveIsBefore expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal BoolExpr DisjunctiveIsBefore(IntervalVar x, IntervalVar y)
         {
@@ -3844,9 +3761,6 @@ namespace OptalCP
             return new BoolExpr(this, "disjunctiveIsBefore", outParams);
         }
 
-        /// <summary>
-        /// Creates a _itvPresenceChain expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint ItvPresenceChain(IEnumerable<IntervalVar> intervals)
         {
@@ -3854,9 +3768,6 @@ namespace OptalCP
             return new Constraint(this, "itvPresenceChain", outParams);
         }
 
-        /// <summary>
-        /// Creates a _itvPresenceChainWithCount expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint ItvPresenceChainWithCount(IEnumerable<IntervalVar> intervals, IntExpr count)
         {
@@ -3864,9 +3775,6 @@ namespace OptalCP
             return new Constraint(this, "itvPresenceChainWithCount", outParams);
         }
 
-        /// <summary>
-        /// Creates a _itvPresenceChainWithCount expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint ItvPresenceChainWithCount(IEnumerable<IntervalVar> intervals, int count)
         {
@@ -3874,9 +3782,6 @@ namespace OptalCP
             return new Constraint(this, "itvPresenceChainWithCount", outParams);
         }
 
-        /// <summary>
-        /// Creates a _endBeforeStartChain expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint EndBeforeStartChain(IEnumerable<IntervalVar> intervals)
         {
@@ -3884,9 +3789,6 @@ namespace OptalCP
             return new Constraint(this, "endBeforeStartChain", outParams);
         }
 
-        /// <summary>
-        /// Creates a _startBeforeStartChain expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint StartBeforeStartChain(IEnumerable<IntervalVar> intervals)
         {
@@ -3894,9 +3796,6 @@ namespace OptalCP
             return new Constraint(this, "startBeforeStartChain", outParams);
         }
 
-        /// <summary>
-        /// Creates a _endBeforeEndChain expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint EndBeforeEndChain(IEnumerable<IntervalVar> intervals)
         {
@@ -3904,9 +3803,6 @@ namespace OptalCP
             return new Constraint(this, "endBeforeEndChain", outParams);
         }
 
-        /// <summary>
-        /// Creates a _varPresenceDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionPresentIntVar(IntExpr variable, bool isLeft)
         {
@@ -3914,9 +3810,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionPresentIntVar", outParams);
         }
 
-        /// <summary>
-        /// Creates a _varPresenceDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionPresentIntVar(int variable, bool isLeft)
         {
@@ -3924,9 +3817,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionPresentIntVar", outParams);
         }
 
-        /// <summary>
-        /// Creates a _varPresenceDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionAbsentIntVar(IntExpr variable, bool isLeft)
         {
@@ -3934,9 +3824,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionAbsentIntVar", outParams);
         }
 
-        /// <summary>
-        /// Creates a _varPresenceDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionAbsentIntVar(int variable, bool isLeft)
         {
@@ -3944,9 +3831,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionAbsentIntVar", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarPresenceDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionPresentIntervalVar(IntervalVar variable, bool isLeft)
         {
@@ -3954,9 +3838,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionPresentIntervalVar", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarPresenceDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionAbsentIntervalVar(IntervalVar variable, bool isLeft)
         {
@@ -3964,9 +3845,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionAbsentIntervalVar", outParams);
         }
 
-        /// <summary>
-        /// Creates a _varRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionPresentLE(IntExpr variable, int bound, bool isLeft)
         {
@@ -3974,9 +3852,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionPresentLE", outParams);
         }
 
-        /// <summary>
-        /// Creates a _varRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionPresentLE(int variable, int bound, bool isLeft)
         {
@@ -3984,9 +3859,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionPresentLE", outParams);
         }
 
-        /// <summary>
-        /// Creates a _varRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionOptionalGT(IntExpr variable, int bound, bool isLeft)
         {
@@ -3994,9 +3866,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionOptionalGT", outParams);
         }
 
-        /// <summary>
-        /// Creates a _varRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionOptionalGT(int variable, int bound, bool isLeft)
         {
@@ -4004,9 +3873,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionOptionalGT", outParams);
         }
 
-        /// <summary>
-        /// Creates a _varRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionPresentGE(IntExpr variable, int bound, bool isLeft)
         {
@@ -4014,9 +3880,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionPresentGE", outParams);
         }
 
-        /// <summary>
-        /// Creates a _varRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionPresentGE(int variable, int bound, bool isLeft)
         {
@@ -4024,9 +3887,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionPresentGE", outParams);
         }
 
-        /// <summary>
-        /// Creates a _varRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionOptionalLT(IntExpr variable, int bound, bool isLeft)
         {
@@ -4034,9 +3894,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionOptionalLT", outParams);
         }
 
-        /// <summary>
-        /// Creates a _varRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionOptionalLT(int variable, int bound, bool isLeft)
         {
@@ -4044,9 +3901,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionOptionalLT", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionPresentStartLE(IntervalVar variable, int bound, bool isLeft)
         {
@@ -4054,9 +3908,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionPresentStartLE", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionOptionalStartGT(IntervalVar variable, int bound, bool isLeft)
         {
@@ -4064,9 +3915,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionOptionalStartGT", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionPresentStartGE(IntervalVar variable, int bound, bool isLeft)
         {
@@ -4074,9 +3922,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionPresentStartGE", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionOptionalStartLT(IntervalVar variable, int bound, bool isLeft)
         {
@@ -4084,9 +3929,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionOptionalStartLT", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionPresentEndLE(IntervalVar variable, int bound, bool isLeft)
         {
@@ -4094,9 +3936,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionPresentEndLE", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionOptionalEndGT(IntervalVar variable, int bound, bool isLeft)
         {
@@ -4104,9 +3943,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionOptionalEndGT", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionPresentEndGE(IntervalVar variable, int bound, bool isLeft)
         {
@@ -4114,9 +3950,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionPresentEndGE", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionOptionalEndLT(IntervalVar variable, int bound, bool isLeft)
         {
@@ -4124,9 +3957,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionOptionalEndLT", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionPresentLengthLE(IntervalVar variable, int bound, bool isLeft)
         {
@@ -4134,9 +3964,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionPresentLengthLE", outParams);
         }
 
-        /// <summary>
-        /// Creates a _intervalVarRangeDecision expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal SearchDecision DecisionOptionalLengthGT(IntervalVar variable, int bound, bool isLeft)
         {
@@ -4144,9 +3971,6 @@ namespace OptalCP
             return new SearchDecision(this, "decisionOptionalLengthGT", outParams);
         }
 
-        /// <summary>
-        /// Creates a _noGood expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint NoGood(IEnumerable<SearchDecision> decisions)
         {
@@ -4154,9 +3978,6 @@ namespace OptalCP
             return new Constraint(this, "noGood", outParams);
         }
 
-        /// <summary>
-        /// Creates a _related expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Directive Related(IntervalVar x, IntervalVar y)
         {
@@ -4164,9 +3985,6 @@ namespace OptalCP
             return new Directive(this, "related", outParams);
         }
 
-        /// <summary>
-        /// Creates a _pack expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint Pack(IEnumerable<IntExpr> load, IEnumerable<IntExpr> where, IEnumerable<int> sizes)
         {
@@ -4174,9 +3992,6 @@ namespace OptalCP
             return new Constraint(this, "pack", outParams);
         }
 
-        /// <summary>
-        /// Creates a _pack expression.
-        /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         internal Constraint Pack(IEnumerable<object> load, IEnumerable<object> where, IEnumerable<int> sizes)
         {

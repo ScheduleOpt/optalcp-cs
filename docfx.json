@@ -11,7 +11,7 @@
       "includePrivateMembers": false,
       "disableGitFeatures": true,
       "properties": {
-        "TargetFramework": "net9.0"
+        "TargetFramework": "net10.0"
       }
     }
   ],
